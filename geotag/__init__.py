@@ -1,1 +1,1 @@
-from . import geotag
+from .geotag import main
