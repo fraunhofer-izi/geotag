@@ -5,6 +5,8 @@ import curses
 from curses.textpad import Textbox, rectangle
 import time
 import locale
+
+# init curses
 locale.setlocale(locale.LC_ALL, '')
 code = locale.getpreferredencoding()
 
@@ -24,97 +26,154 @@ def main():
                         'tumor-deconvolution-dream-challenge/'
                         'extraction_stats_array.tsv')
     args = parser.parse_args()
-    if False:
-        rnaseq = pd.read_csv(args.rnaSeq, sep = "\t", low_memory=False)\
-            .set_index('id')
-        lines = rnaseq.to_string().splitlines()
-        for i, line in enumerate(lines):
-            print(line[0:10])
-        time.sleep(1)
-    curses.wrapper(application, args)
-    print('I am the main.')
+    app = App(args)
+    curses.wrapper(app.run)
 
-def application(stdscr, args):
-    stdscr.clear()
+class App:
+    def __init__(self, args):
+        self.rnaseq = pd.read_csv(args.rnaSeq, sep = "\t", low_memory=False)
+        self.show_now = 'selected_cols'
+        self.reset_selected_cols()
+        self.toggl_help(False)
+        self.print_help = False
+        self.pointer = 0
+        self.selection = {self.pointer}
+        self.lrpos = 0
+        self.top = 0
 
-    rnaseq = pd.read_csv(args.rnaSeq, sep = "\t", low_memory=False)
-    curr = rnaseq.copy()
-    curses.init_pair(1, curses.COLOR_RED, curses.COLOR_WHITE)
-    lines = curr.to_string().splitlines()
-    header = lines[0]
-    lines = lines[1:]
-    total_lines = len(lines)
+    def reset_selected_cols(self):
+        self.colnames = ['gse', 'id', 'status', 'coarse.cell.type',
+                         'pattern', 'val']
 
-    message = ''
-    pointer = 0
-    lrpos = 0
-    top = 0
-    selection = {pointer}
-    c = cn = ''
-    while True:
-        curses.update_lines_cols()
-        nlines = curses.LINES-6
-        top = pointer if pointer < top else top
-        top = pointer - nlines if pointer >= top + nlines else top
-        tabcols = curses.COLS
-        cols = slice(lrpos, lrpos+tabcols)
-        button = top + nlines
-        stdscr.addstr(0, 0, header[cols])
-        for i in range(nlines+1):
-            pos = i + top
-            if pos > total_lines:
+    def toggl_help(self, to: bool=None):
+        if to is not None:
+            self.print_help = to
+        else:
+            self.print_help = not self.print_help
+
+    @property
+    def current(self):
+        if self.show_now == 'raw':
+            return self.rnaseq
+        elif self.show_now == 'selected_cols':
+            return self.rnaseq.loc[:, self.colnames]
+
+    def header_body(self):
+        df = self.current
+        lines = df.to_string(index=False).splitlines()
+        header = lines[0]
+        lines = lines[1:]
+        self.total_lines = len(lines)
+        return header, lines, self.total_lines, df
+
+    def _init_curses(self):
+        curses.init_pair(1, curses.COLOR_RED, curses.COLOR_WHITE)
+
+    def run(self, stdscr):
+        self._init_curses()
+        message = ''
+        c = 0
+        cn = b''
+        header, lines, self.total_lines, df = self.header_body()
+        while True:
+            curses.update_lines_cols()
+            padding = ' '*curses.COLS
+            nlines = curses.LINES-6
+            self.top = self.pointer if self.pointer < self.top else self.top
+            self.top = self.pointer - nlines if self.pointer >= self.top + nlines else self.top
+            tabcols = curses.COLS
+            cols = slice(self.lrpos, self.lrpos+tabcols)
+            button = self.top + nlines
+            self._print_body(stdscr, header, lines, nlines, cols)
+            stdscr.addstr(nlines+2, 0, f'top: {self.top} '
+                          f'nlines: {nlines} '
+                          f'total_lines: {self.total_lines} '
+                          f'pointer: {self.pointer}' + padding)
+            cn = curses.keyname(c)
+            stdscr.addstr(nlines+3, 0, '%s is %s and %s' %
+                          (cn, c, b'^' in cn) + padding)
+            #stdscr.addstr(nlines+4, 0, '%s %s' % (curr['id'].iloc[self.pointer], ' '*curses.COLS))
+            if len(self.selection) == 1:
+                stdscr.addstr(nlines+4, 0,
+                              f'selected: {df["id"].iloc[self.pointer]}'
+                              + padding)
+            else:
+                stdscr.addstr(nlines+4, 0,
+                              f'selected: {len(self.selection)}' + ' '*curses.COLS)
+            c = stdscr.getch()
+            if c == ord('q'):
                 break
-            attr = curses.A_REVERSE if pos in selection else curses.A_NORMAL
-            stdscr.addstr(i+1, 0, lines[pos][cols], attr)
-        stdscr.addstr(nlines+2, 0, f'top: {top} '
-                      f'nlines: {nlines} '
-                      f'total_lines: {total_lines} '
-                      f'pointer: {pointer} ' +
-                      ' '*curses.COLS)
-        stdscr.addstr(nlines+3, 0, '%s is %s %s' % (cn, c, ' '*curses.COLS))
-        stdscr.addstr(nlines+4, 0, '%s %s' % (curr['id'].iloc[pointer], ' '*curses.COLS))
-        c = stdscr.getch()
+            self._react(c, nlines, tabcols)
+
+    def _print_body(self, stdscr, header, lines, nlines, cols, y0=0, x0=0):
+        padding = ' '*curses.COLS
+        h = header + padding
+        stdscr.addstr(y0, x0, h[cols])
+        for i in range(nlines+1):
+            pos = i + self.top
+            if pos > self.total_lines:
+                break
+            attr = curses.A_REVERSE if self.is_selected(pos) else curses.A_NORMAL
+            text = lines[pos]+padding
+            stdscr.addstr(y0+i+1, x0, text[cols], attr)
+
+    def is_selected(self, pointer):
+        return pointer in self.selection
+
+    def _react(self, c, nlines, tabcols):
         cn = curses.keyname(c)
-        if c == ord('q'):
-            break
+        if b'^' in cn: # CTRL Key
+            if cn == b'^J': # ENTER
+                pass
+            elif cn == b'^A':
+                self.selection = range(self.total_lines)
         elif c == ord('c'):
             curses.echo()
             s = stdscr.getstr(0,0, 15)
             curses.noecho()
+        elif c == ord('h'):
+            self.toggl_help()
         elif c == curses.KEY_UP:
-            pointer -= 1
-            pointer %= total_lines
-            selection = {pointer}
+            self.pointer -= 1
+            self.pointer %= self.total_lines
+            self.selection = {self.pointer}
         elif c == curses.KEY_DOWN:
-            pointer += 1
-            pointer %= total_lines
-            selection = {pointer}
+            self.pointer += 1
+            self.pointer %= self.total_lines
+            self.selection = {self.pointer}
         elif cn == b'A': # SHIFT + UP
-            pointer = max(min(selection) - 1, 0)
-            pointer %= total_lines
-            selection.add(pointer)
+            self.pointer = max(min(self.selection) - 1, 0)
+            self.pointer %= self.total_lines
+            self.selection.add(self.pointer)
         elif cn == b'B': # SHIFT + DOWN
-            pointer = min(max(selection) + 1, total_lines)
-            pointer %= total_lines
-            selection.add(pointer)
+            self.pointer = min(max(self.selection) + 1, self.total_lines)
+            self.pointer %= self.total_lines
+            self.selection.add(self.pointer)
         elif c == curses.KEY_LEFT:
-            if lrpos > 0:
-                lrpos -= 1
+            if self.lrpos > 0:
+                self.lrpos -= 1
         elif cn == b'D': # SHIFT + LEFT
-            lrpos = max(0, lrpos - tabcols)
+            self.lrpos = max(0, self.lrpos - tabcols)
         elif c == curses.KEY_RIGHT:
-            lrpos += 1
+            self.lrpos += 1
         elif cn == b'C': # SHIFT + RIGHT
-            lrpos = lrpos + tabcols
+            self.lrpos = self.lrpos + tabcols
         elif c == curses.KEY_NPAGE:
-            top += nlines
-            pointer = min(top, total_lines-1)
-            top = min(total_lines-nlines-1, top)
-            selection = {pointer}
+            self.top += nlines
+            self.pointer = min(self.top, self.total_lines-1)
+            self.top = min(self.total_lines-nlines-1, self.top)
+            self.selection = {self.pointer}
         elif c == curses.KEY_PPAGE:
-            top = max(top-nlines, 0)
-            pointer = top
-            selection = {pointer}
+            self.top = max(self.top-nlines, 0)
+            self.pointer = self.top
+            self.selection = {self.pointer}
+        elif c == curses.KEY_HOME:
+            self.pointer = self.top = 0
+            self.selection = {self.pointer}
+        elif c == curses.KEY_END:
+            self.top = self.total_lines-nlines-1
+            self.pointer = self.total_lines-1
+            self.selection = {self.pointer}
         elif c == ord('n'):
             stdscr.addstr(0, 0, "Enter IM message: (hit Ctrl-G to send)")
             editwin = curses.newwin(5,30, 2,1)
@@ -125,10 +184,7 @@ def application(stdscr, args):
             box.edit()
             # Get resulting contents
             message = box.gather()
-    #pad.addstr(0, 0, 'hello')
-    #pad.addstr(10, 0, 'hello', curses.color_pair(1))
-    #pad.refresh(0,0,0,0,100,100)
-    #stdscr.refresh()
+        return self.pointer, self.selection
 
 if __name__ == "__main__":
     main()
