@@ -7,8 +7,8 @@ import time
 import locale
 
 # init curses
-locale.setlocale(locale.LC_ALL, '')
-code = locale.getpreferredencoding()
+#locale.setlocale(locale.LC_ALL, '')
+#code = locale.getpreferredencoding()
 
 def main():
     desc = 'Interface to quickly tag geo data sets.'
@@ -71,6 +71,7 @@ class App:
 
     def run(self, stdscr):
         self._init_curses()
+        self.stdscr = stdscr
         message = ''
         c = 0
         cn = b''
@@ -84,10 +85,11 @@ class App:
             tabcols = curses.COLS
             cols = slice(self.lrpos, self.lrpos+tabcols)
             button = self.top + nlines
-            self._print_body(stdscr, header, lines, nlines, cols)
+            self._print_body(header, lines, nlines, cols)
             stdscr.addstr(nlines+2, 0, f'top: {self.top} '
                           f'nlines: {nlines} '
                           f'total_lines: {self.total_lines} '
+                          f'pint_help: {self.print_help} '
                           f'pointer: {self.pointer}' + padding)
             cn = curses.keyname(c)
             stdscr.addstr(nlines+3, 0, '%s is %s and %s' %
@@ -100,22 +102,24 @@ class App:
             else:
                 stdscr.addstr(nlines+4, 0,
                               f'selected: {len(self.selection)}' + ' '*curses.COLS)
+            if self.print_help:
+                self._print_help()
             c = stdscr.getch()
             if c == ord('q'):
                 break
             self._react(c, nlines, tabcols)
 
-    def _print_body(self, stdscr, header, lines, nlines, cols, y0=0, x0=0):
+    def _print_body(self, header, lines, nlines, cols, y0=0, x0=0):
         padding = ' '*curses.COLS
         h = header + padding
-        stdscr.addstr(y0, x0, h[cols])
+        self.stdscr.addstr(y0, x0, h[cols])
         for i in range(nlines+1):
             pos = i + self.top
             if pos > self.total_lines:
                 break
             attr = curses.A_REVERSE if self.is_selected(pos) else curses.A_NORMAL
             text = lines[pos]+padding
-            stdscr.addstr(y0+i+1, x0, text[cols], attr)
+            self.stdscr.addstr(y0+i+1, x0, text[cols], attr)
 
     def is_selected(self, pointer):
         return pointer in self.selection
@@ -129,7 +133,7 @@ class App:
                 self.selection = range(self.total_lines)
         elif c == ord('c'):
             curses.echo()
-            s = stdscr.getstr(0,0, 15)
+            s = self.stdscr.getstr(0,0, 15)
             curses.noecho()
         elif c == ord('h'):
             self.toggl_help()
@@ -175,16 +179,44 @@ class App:
             self.pointer = self.total_lines-1
             self.selection = {self.pointer}
         elif c == ord('n'):
-            stdscr.addstr(0, 0, "Enter IM message: (hit Ctrl-G to send)")
+            self.stdscr.addstr(0, 0, "Enter IM message: (hit Ctrl-G to send)")
             editwin = curses.newwin(5,30, 2,1)
-            rectangle(stdscr, 1,0, 1+5+1, 1+30+1)
-            stdscr.refresh()
+            rectangle(self.stdscr, 1,0, 1+5+1, 1+30+1)
+            self.stdscr.refresh()
             box = Textbox(editwin)
             # Let the user edit until Ctrl-G is struck.
             box.edit()
             # Get resulting contents
             message = box.gather()
-        return self.pointer, self.selection
+
+    def _print_help(self):
+        hight = min(len(self.helptext), curses.LINES-4)
+        width = min(80, curses.COLS-4)
+        win = self.stdscr.subwin(hight, width, 2, 2)
+        win.clear()
+        win.border()
+        for i in range(1, hight-1):
+            win.addstr(i, 1, self.helptext[i][:width-2])
+        if hight < len(self.helptext):
+            win.addstr(i, 1, ' '*(width-2))
+            win.addstr(i, 1, '    ...'[:width-2])
+        self.stdscr.refresh()
+
+    helptext = """
+    h           This help window.
+    UP          Move upward.
+    PAGEUP      Move upward one page.
+    SHIFT+UP    Select upward.
+    DOWN        Move downward.
+    PAGEDOWN    Move down one page.
+    SHIFT+DOWN  Select downward.
+    LEFT        Move to the left hand side.
+    SHIFT+LEFT  Move to the left by one page.
+    RIGHT       Move to the right hand side.
+    SHIFT+RIGHT Move to the right by one page.
+    HOME        Move to the start of the table.
+    END         Move to the end of the table.
+    """.splitlines()
 
 if __name__ == "__main__":
     main()
