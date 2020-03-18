@@ -6,9 +6,9 @@ from curses.textpad import Textbox, rectangle
 import time
 import locale
 
-# init curses
-#locale.setlocale(locale.LC_ALL, '')
-#code = locale.getpreferredencoding()
+# use system default localization
+locale.setlocale(locale.LC_ALL, '')
+code = locale.getpreferredencoding()
 
 def main():
     desc = 'Interface to quickly tag geo data sets.'
@@ -129,7 +129,7 @@ class App:
             if cn == b'^J': # ENTER
                 pass
             elif cn == b'^A':
-                self.selection = range(self.total_lines)
+                self.selection = set(range(self.total_lines))
         elif c == ord('c'):
             curses.echo()
             s = self.stdscr.getstr(0,0, 15)
@@ -151,7 +151,7 @@ class App:
             self.pointer %= self.total_lines
             self.selection.add(self.pointer)
         elif cn == b'B': # Shift + Down
-            self.pointer = min(max(self.selection) + 1, self.total_lines)
+            self.pointer = min(max(self.selection) + 1, self.total_lines-1)
             self.pointer %= self.total_lines
             self.selection.add(self.pointer)
         elif c == curses.KEY_LEFT:
@@ -205,6 +205,11 @@ class App:
         self.stdscr.refresh()
 
     def _view_dialoge(self):
+        hight = min(len(self.helptext), curses.LINES-4)
+        width = min(80, curses.COLS-4)
+        win = self.stdscr.subwin(hight, width, 2, 2)
+        win.clear()
+        win.border()
         pass
 
     helptext = """
