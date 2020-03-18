@@ -7,7 +7,7 @@ import time
 import locale
 
 # use system default localization
-locale.setlocale(locale.LC_ALL, '')
+locale.setlocale(locale.LC_ALL, 'C')
 code = locale.getpreferredencoding()
 
 def main():
