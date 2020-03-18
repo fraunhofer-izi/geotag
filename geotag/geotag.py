@@ -148,11 +148,9 @@ class App:
             self.selection = {self.pointer}
         elif cn == b'A': # Shift + Up
             self.pointer = max(min(self.selection) - 1, 0)
-            self.pointer %= self.total_lines
             self.selection.add(self.pointer)
         elif cn == b'B': # Shift + Down
             self.pointer = min(max(self.selection) + 1, self.total_lines-1)
-            self.pointer %= self.total_lines
             self.selection.add(self.pointer)
         elif c == curses.KEY_LEFT:
             if self.lrpos > 0:
