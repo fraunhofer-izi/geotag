@@ -35,7 +35,6 @@ class App:
         self.show_now = 'selected_cols'
         self.reset_selected_cols()
         self.toggl_help(False)
-        self.print_help = False
         self.pointer = 0
         self.selection = {self.pointer}
         self.lrpos = 0
@@ -137,6 +136,8 @@ class App:
             curses.noecho()
         elif c == ord('h'):
             self.toggl_help()
+        elif c == ord('v'):
+            self._view_dialoge()
         elif c == curses.KEY_UP:
             self.pointer -= 1
             self.pointer %= self.total_lines
@@ -145,22 +146,22 @@ class App:
             self.pointer += 1
             self.pointer %= self.total_lines
             self.selection = {self.pointer}
-        elif cn == b'A': # SHIFT + UP
+        elif cn == b'A': # Shift + Up
             self.pointer = max(min(self.selection) - 1, 0)
             self.pointer %= self.total_lines
             self.selection.add(self.pointer)
-        elif cn == b'B': # SHIFT + DOWN
+        elif cn == b'B': # Shift + Down
             self.pointer = min(max(self.selection) + 1, self.total_lines)
             self.pointer %= self.total_lines
             self.selection.add(self.pointer)
         elif c == curses.KEY_LEFT:
             if self.lrpos > 0:
                 self.lrpos -= 1
-        elif cn == b'D': # SHIFT + LEFT
+        elif cn == b'D': # Shift + Left
             self.lrpos = max(0, self.lrpos - tabcols)
         elif c == curses.KEY_RIGHT:
             self.lrpos += 1
-        elif cn == b'C': # SHIFT + RIGHT
+        elif cn == b'C': # Shift + Right
             self.lrpos = self.lrpos + tabcols
         elif c == curses.KEY_NPAGE:
             self.top += nlines
@@ -196,27 +197,35 @@ class App:
         win.clear()
         win.border()
         for i in range(1, hight-1):
-            win.addstr(i, 1, self.helptext[i][:width-2])
+            text = '    ' + self.helptext[i].strip()
+            win.addstr(i, 1, text[:width-2])
         if hight < len(self.helptext):
             win.addstr(i, 1, ' '*(width-2))
             win.addstr(i, 1, '    ...'[:width-2])
         self.stdscr.refresh()
 
+    def _view_dialoge(self):
+        pass
+
     helptext = """
-    h           This help window.
-    UP          Move upward.
-    PAGEUP      Move upward one page.
-    SHIFT+UP    Select upward.
-    DOWN        Move downward.
-    PAGEDOWN    Move down one page.
-    SHIFT+DOWN  Select downward.
-    LEFT        Move to the left hand side.
-    SHIFT+LEFT  Move to the left by one page.
-    RIGHT       Move to the right hand side.
-    SHIFT+RIGHT Move to the right by one page.
-    HOME        Move to the start of the table.
-    END         Move to the end of the table.
-    """.splitlines()
+        h           This help window.
+        q           Save and quit geotag.
+        v           View dialoge.
+        Up          Move upward.
+        Down        Move downward.
+        Pageup      Move upward one page.
+        Pagedown    Move down one page.
+        Shift+Up    Select upward.
+        Shift+Down  Select downward.
+        Left        Move to the left hand side.
+        Right       Move to the right hand side.
+        Shift+Left  Move to the left by one page.
+        Shift+Right Move to the right by one page.
+        Home        Move to the start of the table.
+        End         Move to the end of the table.
+
+        Ctrl+a      Select all.
+        """.splitlines()
 
 if __name__ == "__main__":
     main()
