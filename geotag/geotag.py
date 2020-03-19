@@ -41,16 +41,18 @@ def main():
                         default="/home/dominik/rn_home/dominik.otto/Projects/"
                         f"geotag/data/{os.environ['USER']}.log")
     args = parser.parse_args()
-    app = App(args)
+    app = App(**vars(args))
     curses.wrapper(app.run)
 
 tcolors = [196, 203, 202, 208, 178, 148, 106, 71, 31, 26]
 
 class App:
-    def __init__(self, args):
-        self.df = pd.read_csv(args.rnaSeq, sep = "\t", low_memory=False)
+    def __init__(self, rnaSeq, array, log, **kwargs):
+        logging.basicConfig(filename=log, filemode='a', level=logging.DEBUG,
+                format='[%(asctime)s] %(levelname)s: %(message)s')
+        self.raw_df = pd.read_csv(rnaSeq, sep = "\t", low_memory=False)
         self.sort_columns = set()
-        self.ordered_columns = list(self.df.columns)
+        self.ordered_columns = list(self.raw_df.columns)
         self.reset_selected_cols()
         self.toggl_help(False)
         self.in_dialog = False
@@ -72,12 +74,12 @@ class App:
             self.print_help = not self.print_help
 
     def update_df(self):
-        r = self.df.copy()
+        r = self.raw_df.copy()
         if self.sort_columns:
             sc = [c for c in self.ordered_columns if c in self.sort_columns]
             r = r.sort_values(sc)
         cols = [c for c in self.ordered_columns if c in self.show_columns]
-        r = r.loc[:, cols]
+        r = r[cols]
         self.df = r
         if self.color_by not in r.columns:
             self.coloring_now = False
@@ -169,8 +171,10 @@ class App:
             if pos > self.total_lines:
                 break
             if self.coloring_now in self.df.columns:
-                col = self.colmap(self.df[self.coloring_now].iloc[pos])
-                attr |= curses.color_pair(col)
+                val = self.df[self.coloring_now].iloc[pos]
+                if val:
+                    col = self.colmap(val)
+                    attr |= curses.color_pair(col)
             text = lines[pos]+padding
             self.stdscr.addstr(y0+i+1, x0, text[cols], attr)
 
@@ -330,19 +334,24 @@ class App:
         elif c == ord('d'):
             col = self.ordered_columns[self.col_pointer]
             if col in self.show_columns:
+                logging.info(f'Deactivate "{col}".')
                 self.show_columns.remove(col)
             else:
+                logging.info(f'Activate "{col}".')
                 self.show_columns.add(col)
             self._dialog_changed = True
         elif c == ord('s'):
             col = self.ordered_columns[self.col_pointer]
             if col in self.sort_columns:
+                logging.info(f'Do not sort by "{col}".')
                 self.sort_columns.remove(col)
             else:
+                logging.info(f'Sort by "{col}".')
                 self.sort_columns.add(col)
             self._dialog_changed = True
         elif c == curses.KEY_SR or cn == b'A':
             col_val = self.ordered_columns[self.col_pointer]
+            logging.info(f'Moving column "{col_val}" up.')
             col_pos = self.col_pointer
             self.col_pointer -= 1
             self.col_pointer %= len(self.ordered_columns)
@@ -352,6 +361,7 @@ class App:
             self._dialog_changed = True
         elif c == curses.KEY_SF or cn == b'B': # Shift + Down
             col_val = self.ordered_columns[self.col_pointer]
+            logging.info(f'Moving column "{col_val}" down.')
             col_pos = self.col_pointer
             self.col_pointer += 1
             self.col_pointer %= len(self.ordered_columns)
@@ -361,6 +371,7 @@ class App:
             self._dialog_changed = True
         elif c == ord('c'):
             col = self.ordered_columns[self.col_pointer]
+            logging.info(f'Coloring by "{col}".')
             if self.color_by == col:
                 self.color_by = False
             else:
