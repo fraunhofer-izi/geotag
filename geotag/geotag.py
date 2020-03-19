@@ -51,8 +51,25 @@ def main():
                         type=str, metavar='path.yml',
                         default="/home/dominik/rn_home/dominik.otto/Projects/"
                         f"geotag/data/{os.environ['USER']}.yml")
+    parser.add_argument('--state',
+                        help='Path to a cached state of geotag.',
+                        type=str, metavar='path.pkl',
+                        default="/home/dominik/rn_home/dominik.otto/Projects/"
+                        f"geotag/data/{os.environ['USER']}.pkl")
+    parser.add_argument('--update',
+                        help='Overwrite the cache.',
+                        action="store_true",
+                        type=str, metavar='bool')
     args = parser.parse_args()
-    app = App(**vars(args))
+    if if not args.update and os.path.exists(args.state):
+        app = pickle.load(open(args.state, 'r'))
+        if app.__version__ != App.__version__:
+            raise Exeption(f'The geotag version "{App.__version__}" differs '
+                    'from version of the cache "{app.__version__}". '
+                    'Pass the parameter --update if you want to overwrite it.')
+        # transfer attributes
+    else:
+        app = App(**vars(args))
     curses.wrapper(app.run)
 
 tcolors = [196, 203, 202, 208, 178, 148, 106, 71, 31, 26]
@@ -60,10 +77,12 @@ default_tags = {
     'quality':{
         'type':int,
         'desc':'From 0 to 9.',
+        'key':b'^q'
     },
     'note':{
         'type':str,
-        'desc':'A note.'
+        'desc':'A note.',
+        'key':b'^n'
     }
 }
 
