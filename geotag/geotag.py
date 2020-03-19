@@ -48,6 +48,7 @@ class App:
         self.selection = {self.pointer}
         self.lrpos = 0
         self.top = 0
+        self.color_by = False
 
     def reset_selected_cols(self):
         self.show_columns = {'gse', 'id', 'status', 'coarse.cell.type',
@@ -59,23 +60,32 @@ class App:
         else:
             self.print_help = not self.print_help
 
-    @property
-    def current(self):
+    def update_df(self):
         r = self.df.copy()
         if self.sort_columns:
             sc = [c for c in self.ordered_columns if c in self.sort_columns]
             r = r.sort_values(sc)
         cols = [c for c in self.ordered_columns if c in self.show_columns]
         r = r.loc[:, cols]
-        return r
+        self.df = r
+        if self.color_by not in r.columns:
+            self.coloring_now = False
+            return
+        self.coloring_now = self.color_by
+        if pd.api.types.is_numeric_dtype(r[self.color_by].dtype):
+            self.colmap = lambda x: int(x%10)+1
+        else:
+            cmap = {key:i%10+1 for i, key in
+                    enumerate(sorted(set(r[self.color_by])))}
+            self.colmap = lambda x: cmap[x]
 
     def header_body(self):
-        df = self.current
-        lines = df.to_string(index=False).splitlines()
+        self.update_df()
+        lines = self.df.to_string(index=False).splitlines()
         header = lines[0]
         lines = lines[1:]
         self.total_lines = len(lines)
-        return header, lines, self.total_lines, df
+        return header, lines, self.total_lines
 
     def _init_curses(self):
         curses.use_default_colors()
@@ -83,6 +93,7 @@ class App:
         curses.init_pair(101, curses.COLOR_BLUE, -1)
         curses.init_pair(102, curses.COLOR_RED, -1)
         curses.init_pair(103, curses.COLOR_WHITE, -1)
+        curses.init_pair(104, curses.COLOR_YELLOW, -1)
         for i, col in enumerate(tcolors):
             curses.init_pair(i+1, col, -1)
 
@@ -95,7 +106,7 @@ class App:
         self._update_now = True
         while True:
             if self._update_now:
-                header, lines, self.total_lines, df = self.header_body()
+                header, lines, self.total_lines = self.header_body()
                 self._update_now = False
             curses.update_lines_cols()
             padding = ' '*curses.COLS
@@ -111,14 +122,15 @@ class App:
                           f'nlines: {nlines} '
                           f'total_lines: {self.total_lines} '
                           f'pint_help: {self.print_help} '
-                          f'pointer: {self.pointer}' + padding)
+                          f'pointer: {self.pointer} '
+                          f'color by: {self.coloring_now}' + padding)
             cn = curses.keyname(c)
             stdscr.addstr(nlines+3, 0, '%s is %s and %s' %
                           (cn, c, b'^' in cn) + padding)
             #stdscr.addstr(nlines+4, 0, '%s %s' % (curr['id'].iloc[self.pointer], ' '*curses.COLS))
             if len(self.selection) == 1:
                 stdscr.addstr(nlines+4, 0,
-                              f'selected: {df["id"].iloc[self.pointer]}'
+                              f'selected: {self.df["id"].iloc[self.pointer]}'
                               + padding)
             else:
                 stdscr.addstr(nlines+4, 0,
@@ -142,12 +154,14 @@ class App:
         self.stdscr.addstr(y0, x0, h[cols])
         for i in range(nlines+1):
             pos = i + self.top
+            attr = curses.A_REVERSE if self.is_selected(pos) else curses.A_NORMAL
             if pos > self.total_lines:
                 break
-            col = curses.color_pair(i%len(tcolors)+1)
-            attr = curses.A_REVERSE if self.is_selected(pos) else curses.A_NORMAL
+            if self.coloring_now in self.df.columns:
+                col = self.colmap(self.df[self.coloring_now].iloc[pos])
+                attr |= curses.color_pair(col)
             text = lines[pos]+padding
-            self.stdscr.addstr(y0+i+1, x0, text[cols], col | attr)
+            self.stdscr.addstr(y0+i+1, x0, text[cols], attr)
 
     def is_selected(self, pointer):
         return pointer in self.selection
@@ -241,6 +255,7 @@ class App:
             'Enter':'edit regex',
             'd':'toggle deactivate',
             's':'toggle sort by',
+            'c':'toggle color by',
             'shift+up/down':'change order'
         }
         win.move(1, 5)
@@ -255,7 +270,8 @@ class App:
         legend = {
             'legend:':103,
             'deactivated':102,
-            'sorted by':101
+            'sorted by':101,
+            'color by':104
         }
         win.move(2, 5)
         for lable, col in legend.items():
@@ -279,10 +295,12 @@ class App:
                 win.addstr(ypos, 5, '...'[:width-6])
                 break
             attr = curses.A_REVERSE if i==self.col_pointer else curses.A_NORMAL
-            if col in self.sort_columns:
-                attr |= curses.color_pair(legend['sorted by'])
-            elif col not in self.show_columns:
+            if col not in self.show_columns:
                 attr |= curses.color_pair(legend['deactivated'])
+            elif col == self.color_by:
+                attr |= curses.color_pair(legend['color by'])
+            elif col in self.sort_columns:
+                attr |= curses.color_pair(legend['sorted by'])
             text = col + ' '*(indentation-len(col)+1) + f'text {i}'
             win.addstr(ypos, 5, text[:width-6], attr)
 
@@ -329,6 +347,13 @@ class App:
             self.ordered_columns[col_pos] = \
                     self.ordered_columns[self.col_pointer]
             self.ordered_columns[self.col_pointer] = col_val
+            self._dialog_changed = True
+        elif c == ord('c'):
+            col = self.ordered_columns[self.col_pointer]
+            if self.color_by == col:
+                self.color_by = False
+            else:
+                self.color_by = col
             self._dialog_changed = True
 
     helptext = """
