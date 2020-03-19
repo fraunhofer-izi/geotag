@@ -16,15 +16,19 @@ def main():
     parser.add_argument('--rnaSeq',
                         help='.RDS table containing the extraction status of '
                         'RNASeq studies.', type=str, metavar='path',
-                        default='/mnt/ribolution/user_worktmp/dominik.otto/'
-                        'tumor-deconvolution-dream-challenge/'
-                        'extraction_stats_head.tsv')
+                        #default='/mnt/ribolution/user_worktmp/dominik.otto/'
+                        #'tumor-deconvolution-dream-challenge/'
+                        #'extraction_stats_head.tsv')
+                        default="/home/dominik/rn_home/dominik.otto/Projects/"
+                        "geotag/data/extraction_stats_head.tsv")
     parser.add_argument('--array',
                         help='.RDS table containing the extraction status of '
                         'microarray studies.', type=str, metavar='path',
-                        default='/mnt/ribolution/user_worktmp/dominik.otto/'
-                        'tumor-deconvolution-dream-challenge/'
-                        'extraction_stats_array.tsv')
+                        #default='/mnt/ribolution/user_worktmp/dominik.otto/'
+                        #'tumor-deconvolution-dream-challenge/'
+                        #'extraction_stats_array.tsv')
+                        default="/home/dominik/rn_home/dominik.otto/Projects/"
+                        "geotag/data/extraction_stats_array.tsv")
     args = parser.parse_args()
     app = App(args)
     curses.wrapper(app.run)
@@ -35,6 +39,7 @@ class App:
         self.show_now = 'selected_cols'
         self.reset_selected_cols()
         self.toggl_help(False)
+        self.in_dialog = False
         self.pointer = 0
         self.selection = {self.pointer}
         self.lrpos = 0
@@ -66,7 +71,7 @@ class App:
         return header, lines, self.total_lines, df
 
     def _init_curses(self):
-        curses.init_pair(1, curses.COLOR_RED, curses.COLOR_WHITE)
+        curses.init_pair(1, 2, 0) # button help
 
     def run(self, stdscr):
         self._init_curses()
@@ -103,10 +108,15 @@ class App:
                               f'selected: {len(self.selection)}' + ' '*curses.COLS)
             if self.print_help:
                 self._print_help()
+            if self.in_dialog:
+                self._view_dialoge()
             c = stdscr.getch()
             if c == ord('q'):
                 break
-            self._react(c, nlines, tabcols)
+            if self.in_dialog:
+                self._dialog(c)
+            else:
+                self._react(c, nlines, tabcols)
 
     def _print_body(self, header, lines, nlines, cols, y0=0, x0=0):
         padding = ' '*curses.COLS
@@ -137,7 +147,7 @@ class App:
         elif c == ord('h'):
             self.toggl_help()
         elif c == ord('v'):
-            self._view_dialoge()
+            self.in_dialog = True
         elif c == curses.KEY_UP:
             self.pointer -= 1
             self.pointer %= self.total_lines
@@ -146,20 +156,20 @@ class App:
             self.pointer += 1
             self.pointer %= self.total_lines
             self.selection = {self.pointer}
-        elif cn == b'A': # Shift + Up
+        elif c == curses.KEY_SR or cn == b'A':
             self.pointer = max(min(self.selection) - 1, 0)
             self.selection.add(self.pointer)
-        elif cn == b'B': # Shift + Down
+        elif c == curses.KEY_SF or cn == b'B': # Shift + Down
             self.pointer = min(max(self.selection) + 1, self.total_lines-1)
             self.selection.add(self.pointer)
         elif c == curses.KEY_LEFT:
             if self.lrpos > 0:
                 self.lrpos -= 1
-        elif cn == b'D': # Shift + Left
+        elif c == curses.KEY_SLEFT or cn == b'D':
             self.lrpos = max(0, self.lrpos - tabcols)
         elif c == curses.KEY_RIGHT:
             self.lrpos += 1
-        elif cn == b'C': # Shift + Right
+        elif c == curses.KEY_SRIGHT or cn == b'C':
             self.lrpos = self.lrpos + tabcols
         elif c == curses.KEY_NPAGE:
             self.top += nlines
@@ -195,20 +205,38 @@ class App:
         win.clear()
         win.border()
         for i in range(1, hight-1):
-            text = '    ' + self.helptext[i].strip()
-            win.addstr(i, 1, text[:width-2])
+            win.addstr(i, 5, self.helptext[i].strip()[:width-6])
         if hight < len(self.helptext):
             win.addstr(i, 1, ' '*(width-2))
-            win.addstr(i, 1, '    ...'[:width-2])
-        self.stdscr.refresh()
+            win.addstr(i, 5, '...'[:width-6])
 
     def _view_dialoge(self):
-        hight = min(len(self.helptext), curses.LINES-4)
+        hight = min(100, curses.LINES-4)
         width = min(80, curses.COLS-4)
         win = self.stdscr.subwin(hight, width, 2, 2)
         win.clear()
         win.border()
-        pass
+        htext = 'c: clear  d: toggle deactivate  Enter: edit  Esc: exit'
+        buttons = {
+            'c':'clear',
+            'd':'toggle deactivate',
+            'Enter':'edit',
+            'Esc':'exit'
+        }
+        win.move(1, 5)
+        for key, desc in buttons.items():
+            hintlen = len(key)+len(desc)+4
+            _, x = win.getyx()
+            if x+hintlen > width-2:
+                break
+            win.addstr('  ')
+            win.addstr(key+':', curses.color_pair(1))
+            win.addstr(' '+desc)
+
+    def _dialog(self, c):
+        cn = curses.keyname(c)
+        if cn == b'^[':
+            self.in_dialog = False
 
     helptext = """
         h           This help window.
