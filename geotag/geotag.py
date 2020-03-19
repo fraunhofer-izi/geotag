@@ -96,6 +96,7 @@ class App:
         while True:
             if self._update_now:
                 header, lines, self.total_lines, df = self.header_body()
+                self._update_now = False
             curses.update_lines_cols()
             padding = ' '*curses.COLS
             nlines = curses.LINES-6
