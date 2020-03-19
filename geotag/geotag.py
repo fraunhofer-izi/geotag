@@ -33,6 +33,8 @@ def main():
     app = App(args)
     curses.wrapper(app.run)
 
+tcolors = [196, 203, 202, 208, 178, 148, 106, 71, 31, 26]
+
 class App:
     def __init__(self, args):
         self.rnaseq = pd.read_csv(args.rnaSeq, sep = "\t", low_memory=False)
@@ -71,7 +73,10 @@ class App:
         return header, lines, self.total_lines, df
 
     def _init_curses(self):
-        curses.init_pair(1, 2, 0) # button help
+        curses.use_default_colors()
+        curses.init_pair(100, 2, -1) # button help
+        for i, col in enumerate(tcolors):
+            curses.init_pair(i+1, col, -1)
 
     def run(self, stdscr):
         self._init_curses()
@@ -126,9 +131,10 @@ class App:
             pos = i + self.top
             if pos > self.total_lines:
                 break
+            col = curses.color_pair(i%len(tcolors)+1)
             attr = curses.A_REVERSE if self.is_selected(pos) else curses.A_NORMAL
             text = lines[pos]+padding
-            self.stdscr.addstr(y0+i+1, x0, text[cols], attr)
+            self.stdscr.addstr(y0+i+1, x0, text[cols], col | attr)
 
     def is_selected(self, pointer):
         return pointer in self.selection
@@ -230,7 +236,7 @@ class App:
             if x+hintlen > width-2:
                 break
             win.addstr('  ')
-            win.addstr(key+':', curses.color_pair(1))
+            win.addstr(key+':', curses.color_pair(100))
             win.addstr(' '+desc)
 
     def _dialog(self, c):
