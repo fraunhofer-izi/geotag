@@ -53,8 +53,7 @@ class App:
         self.raw_df = pd.read_csv(rnaSeq, sep = "\t", low_memory=False)
         self.sort_columns = set()
         self.filter = dict()
-        self.ordered_columns = list(self.raw_df.columns)
-        self.reset_selected_cols()
+        self.reset_cols()
         self.toggl_help(False)
         self.in_dialog = False
         self.pointer = 0
@@ -64,9 +63,25 @@ class App:
         self.top = 0
         self.color_by = False
 
-    def reset_selected_cols(self):
-        self.show_columns = {'gse', 'id', 'status', 'coarse.cell.type',
-                         'pattern', 'val'}
+    def reset_cols(self):
+        self.ordered_columns = [
+            'id',
+            'gse',
+            'technology',
+            'status',
+            'coarse.cell.type',
+            'fine.cell.type',
+            'pattern',
+            'col',
+            'val'
+        ]
+        for col in self.ordered_columns:
+            if col not in self.raw_df.columns:
+                self.ordered_columns.remove(col)
+        self.show_columns = set(self.ordered_columns)
+        for col in self.raw_df.columns:
+            if col not in self.ordered_columns:
+                self.ordered_columns.append(col)
 
     def toggl_help(self, to: bool=None):
         if to is not None:
@@ -76,11 +91,19 @@ class App:
 
     def update_df(self):
         r = self.raw_df.copy()
+        for col, filter in self.filter.items():
+            r = r[r[col].astype(str).str.contains(filter)]
         if self.sort_columns:
             sc = [c for c in self.ordered_columns if c in self.sort_columns]
             r = r.sort_values(sc)
         cols = [c for c in self.ordered_columns if c in self.show_columns]
         r = r[cols]
+        if r.empty:
+            logging.debug('No entries match the filter.')
+            r = pd.DataFrame({
+                'id':['none'],
+                'error':['No entries match the filter.']
+            })
         self.df = r
         if self.color_by not in r.columns:
             self.coloring_now = False
@@ -169,8 +192,9 @@ class App:
         for i in range(nlines+1):
             pos = i + self.top
             attr = curses.A_REVERSE if self.is_selected(pos) else curses.A_NORMAL
-            if pos > self.total_lines:
-                break
+            if pos >= self.total_lines:
+                self.stdscr.addstr(y0+i+1, 0, padding)
+                continue
             if self.coloring_now in self.df.columns:
                 val = self.df[self.coloring_now].iloc[pos]
                 if val:
@@ -212,11 +236,11 @@ class App:
             if self.lrpos > 0:
                 self.lrpos -= 1
         elif c == curses.KEY_SLEFT or cn == b'D':
-            self.lrpos = max(0, self.lrpos - tabcols)
+            self.lrpos = max(0, self.lrpos - int(tabcols/2))
         elif c == curses.KEY_RIGHT:
             self.lrpos += 1
         elif c == curses.KEY_SRIGHT or cn == b'C':
-            self.lrpos = self.lrpos + tabcols
+            self.lrpos = self.lrpos + int(tabcols/2)
         elif c == curses.KEY_NPAGE:
             self.top += nlines
             self.pointer = min(self.top, self.total_lines-1)
@@ -259,7 +283,8 @@ class App:
     _window_width = 120
 
     def _view_dialoge(self):
-        hight = min(len(self.ordered_columns)+5, curses.LINES-4)
+        table_y0 = 5
+        hight = min(len(self.ordered_columns)+table_y0+2, curses.LINES-4)
         width = min(self._window_width, curses.COLS-4)
         self.win = self.stdscr.subwin(hight, width, 2, 2)
         self.win.clear()
@@ -273,7 +298,7 @@ class App:
             'c':'toggle color by',
             'shift+up/down':'change order'
         }
-        self.win.move(1, 5)
+        self.win.move(1, 3)
         for key, desc in buttons.items():
             hintlen = len(key)+len(desc)+4
             _, x = self.win.getyx()
@@ -288,7 +313,7 @@ class App:
             'sorted by':101,
             'color by':104
         }
-        self.win.move(2, 5)
+        self.win.move(2, 3)
         for lable, col in legend.items():
             hintlen = len(lable)+2
             _, x = self.win.getyx()
@@ -297,15 +322,16 @@ class App:
             self.win.addstr('  ')
             self.win.addstr(lable, curses.color_pair(col))
         self.indentation = max(len(c) for c in self.ordered_columns)
-        self.woffset = max(0, self.col_pointer-hight+7)
         #self.win.addstr(2, 1, f'self.woffset: {self.woffset} hight:{hight}')
+        self.win.addstr(4, 5, 'column' + ' '*(self.indentation-5) + 'regex')
+        self.woffset = max(0, self.col_pointer-hight+table_y0+3)
         for i, col in enumerate(self.ordered_columns):
             if i < self.woffset:
                 continue
             elif self.woffset > 0 and i == self.woffset:
-                self.win.addstr(4, 5, '...'[:width-6])
+                self.win.addstr(table_y0, 5, '...'[:width-6])
                 continue
-            ypos = i+4-self.woffset
+            ypos = i+table_y0-self.woffset
             if ypos+2 == hight:
                 self.win.addstr(ypos, 5, '...'[:width-6])
                 break
@@ -330,18 +356,20 @@ class App:
             col = self.ordered_columns[self.col_pointer]
             ypos = self.col_pointer + 6 - self.woffset
             xpos = self.indentation + 8
-            width = self._window_width - ypos - 2
+            width = self._window_width - xpos
             editwin = self.stdscr.subwin(1, width, ypos, xpos)
-            editwin.addstr(0, 0, self.filter.get(col, '*'))
+            editwin.addstr(0, 0, self.filter.get(col, ''))
             self.stdscr.refresh()
             box = curses.textpad.Textbox(editwin)
             box.edit()
-            filter = box.gather().strip().splitlines()[0]
-            if len(filter) == width - 15 and filter[-1] == 'x':
-                # the user probably pressed enter instead of Ctr+G
-                filter = filter[:-1].strip()
-            logging.info(f'Setting filter for "{col}": {filter}')
-            self.filter[col] = filter
+            filter = box.gather().strip()
+            if filter not in ['*', '']:
+                logging.info(f'Setting filter for "{col}": "{filter}"')
+                self.filter[col] = filter
+            else:
+                logging.info(f'Setting empty filter for "{col}".')
+                self.filter.pop(col, None)
+            self._dialog_changed = True
         elif c == curses.KEY_UP:
             self.col_pointer -= 1
             self.col_pointer %= len(self.ordered_columns)
@@ -350,10 +378,15 @@ class App:
             self.col_pointer %= len(self.ordered_columns)
         elif c == ord('r'):
             col = self.ordered_columns[self.col_pointer]
-            self.filter.pop(col)
+            logging.info(f'Resetting filter for "{col}".')
+            if col in self.filter:
+                self.filter.pop(col, None)
+                self._dialog_changed = True
         elif c == ord('d'):
             col = self.ordered_columns[self.col_pointer]
-            if col in self.show_columns:
+            if col == 'id':
+                logging.debug(f'Cannot deactivate "{col}".')
+            elif col in self.show_columns:
                 logging.info(f'Deactivate "{col}".')
                 self.show_columns.remove(col)
             else:
@@ -410,8 +443,8 @@ class App:
         Shift+Down  Select downward.
         Left        Move to the left hand side.
         Right       Move to the right hand side.
-        Shift+Left  Move to the left by one page.
-        Shift+Right Move to the right by one page.
+        Shift+Left  Move to the left by half a page.
+        Shift+Right Move to the right by half a page.
         Home        Move to the start of the table.
         End         Move to the end of the table.
 
