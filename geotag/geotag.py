@@ -38,7 +38,8 @@ tcolors = [196, 203, 202, 208, 178, 148, 106, 71, 31, 26]
 class App:
     def __init__(self, args):
         self.df = pd.read_csv(args.rnaSeq, sep = "\t", low_memory=False)
-        self.sort_columns = list()
+        self.sort_columns = set()
+        self.ordered_columns = list(self.df.columns)
         self.reset_selected_cols()
         self.toggl_help(False)
         self.in_dialog = False
@@ -47,11 +48,10 @@ class App:
         self.selection = {self.pointer}
         self.lrpos = 0
         self.top = 0
-        self.update_current()
 
     def reset_selected_cols(self):
-        self.colnames = ['gse', 'id', 'status', 'coarse.cell.type',
-                         'pattern', 'val']
+        self.show_columns = {'gse', 'id', 'status', 'coarse.cell.type',
+                         'pattern', 'val'}
 
     def toggl_help(self, to: bool=None):
         if to is not None:
@@ -59,12 +59,15 @@ class App:
         else:
             self.print_help = not self.print_help
 
-    def update_current(self):
+    @property
+    def current(self):
         r = self.df.copy()
         if self.sort_columns:
-            r = r.sort_values(self.sort_columns)
-        r = r.loc[:, self.colnames]
-        self.current = r
+            sc = [c for c in self.ordered_columns if c in self.sort_columns]
+            r = r.sort_values(sc)
+        cols = [c for c in self.ordered_columns if c in self.show_columns]
+        r = r.loc[:, cols]
+        return r
 
     def header_body(self):
         df = self.current
@@ -89,8 +92,10 @@ class App:
         message = ''
         c = 0
         cn = b''
-        header, lines, self.total_lines, df = self.header_body()
+        self._update_now = True
         while True:
+            if self._update_now:
+                header, lines, self.total_lines, df = self.header_body()
             curses.update_lines_cols()
             padding = ' '*curses.COLS
             nlines = curses.LINES-6
@@ -159,7 +164,8 @@ class App:
             curses.noecho()
         elif c == ord('h'):
             self.toggl_help()
-        elif c == ord('v'):
+        elif c == ord('f'):
+            self._dialog_changed = False
             self.in_dialog = True
         elif c == curses.KEY_UP:
             self.pointer -= 1
@@ -224,17 +230,17 @@ class App:
             win.addstr(i, 5, '...'[:width-6])
 
     def _view_dialoge(self):
-        hight = min(len(self.df.columns)+5, curses.LINES-4)
-        width = min(80, curses.COLS-4)
+        hight = min(len(self.ordered_columns)+5, curses.LINES-4)
+        width = min(120, curses.COLS-4)
         win = self.stdscr.subwin(hight, width, 2, 2)
         win.clear()
         win.border()
-        htext = 'c: clear  d: toggle deactivate  Enter: edit  Esc: exit'
         buttons = {
-            'c':'clear',
+            'e':'exit',
+            'Enter':'edit regex',
             'd':'toggle deactivate',
-            'Enter':'edit',
-            'Esc':'exit'
+            's':'toggle sort by',
+            'shift+up/down':'change order'
         }
         win.move(1, 5)
         for key, desc in buttons.items():
@@ -258,42 +264,76 @@ class App:
                 break
             win.addstr('  ')
             win.addstr(lable, curses.color_pair(col))
-        indentation = max(len(c) for c in self.df.columns)
-        offset = max(0, self.col_pointer-hight+6)
+        indentation = max(len(c) for c in self.ordered_columns)
+        offset = max(0, self.col_pointer-hight+7)
         #win.addstr(2, 1, f'offset: {offset} hight:{hight}')
-        for i, col in enumerate(self.df.columns):
+        for i, col in enumerate(self.ordered_columns):
             if i < offset:
                 continue
             elif offset > 0 and i == offset:
-                win.addstr(3, 5, '...'[:width-6])
+                win.addstr(4, 5, '...'[:width-6])
                 continue
-            ypos = i+3-offset
+            ypos = i+4-offset
             if ypos+2 == hight:
                 win.addstr(ypos, 5, '...'[:width-6])
                 break
             attr = curses.A_REVERSE if i==self.col_pointer else curses.A_NORMAL
             if col in self.sort_columns:
                 attr |= curses.color_pair(legend['sorted by'])
-            elif col not in self.colnames:
+            elif col not in self.show_columns:
                 attr |= curses.color_pair(legend['deactivated'])
             text = col + ' '*(indentation-len(col)+1) + f'text {i}'
             win.addstr(ypos, 5, text[:width-6], attr)
 
     def _dialog(self, c):
         cn = curses.keyname(c)
-        if cn == b'^[':
+        if c == ord('e'):
             self.in_dialog = False
+            if self._dialog_changed:
+                self._update_now = True
         elif c == curses.KEY_UP:
             self.col_pointer -= 1
-            self.col_pointer %= len(self.df.columns)
+            self.col_pointer %= len(self.ordered_columns)
         elif c == curses.KEY_DOWN:
             self.col_pointer += 1
-            self.col_pointer %= len(self.df.columns)
+            self.col_pointer %= len(self.ordered_columns)
+        elif c == ord('d'):
+            col = self.ordered_columns[self.col_pointer]
+            if col in self.show_columns:
+                self.show_columns.remove(col)
+            else:
+                self.show_columns.add(col)
+            self._dialog_changed = True
+        elif c == ord('s'):
+            col = self.ordered_columns[self.col_pointer]
+            if col in self.sort_columns:
+                self.sort_columns.remove(col)
+            else:
+                self.sort_columns.add(col)
+            self._dialog_changed = True
+        elif c == curses.KEY_SR or cn == b'A':
+            col_val = self.ordered_columns[self.col_pointer]
+            col_pos = self.col_pointer
+            self.col_pointer -= 1
+            self.col_pointer %= len(self.ordered_columns)
+            self.ordered_columns[col_pos] = \
+                    self.ordered_columns[self.col_pointer]
+            self.ordered_columns[self.col_pointer] = col_val
+            self._dialog_changed = True
+        elif c == curses.KEY_SF or cn == b'B': # Shift + Down
+            col_val = self.ordered_columns[self.col_pointer]
+            col_pos = self.col_pointer
+            self.col_pointer += 1
+            self.col_pointer %= len(self.ordered_columns)
+            self.ordered_columns[col_pos] = \
+                    self.ordered_columns[self.col_pointer]
+            self.ordered_columns[self.col_pointer] = col_val
+            self._dialog_changed = True
 
     helptext = """
         h           This help window.
         q           Save and quit geotag.
-        v           View dialoge.
+        f           Filter dialoge.
         Up          Move upward.
         Down        Move downward.
         Pageup      Move upward one page.
