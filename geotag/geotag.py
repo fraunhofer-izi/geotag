@@ -6,6 +6,7 @@ from curses.textpad import Textbox, rectangle
 import time
 import locale
 import logging
+import yaml
 
 # use system default localization
 locale.setlocale(locale.LC_ALL, 'C')
@@ -40,20 +41,53 @@ def main():
                         type=str, metavar='path',
                         default="/home/dominik/rn_home/dominik.otto/Projects/"
                         f"geotag/data/{os.environ['USER']}.log")
+    parser.add_argument('--tags',
+                        help='The file path for the tag yaml.',
+                        type=str, metavar='path.yml',
+                        default="/home/dominik/rn_home/dominik.otto/Projects/"
+                        f"geotag/data/tags.yaml")
+    parser.add_argument('--output',
+                        help='The output file path.',
+                        type=str, metavar='path.yml',
+                        default="/home/dominik/rn_home/dominik.otto/Projects/"
+                        f"geotag/data/{os.environ['USER']}.yml")
     args = parser.parse_args()
     app = App(**vars(args))
     curses.wrapper(app.run)
 
 tcolors = [196, 203, 202, 208, 178, 148, 106, 71, 31, 26]
+default_tags = {
+    'quality':{
+        'type':int,
+        'desc':'From 0 to 9.',
+    },
+    'note':{
+        'type':str,
+        'desc':'A note.'
+    }
+}
+
+def uniquify(vals):
+    seen = set()
+    for item in vals:
+        fudge = 1
+        newitem = item
+        while newitem in seen:
+            fudge += 1
+            newitem = "{}_{}".format(item, fudge)
+        yield newitem
+        seen.add(newitem)
 
 class App:
-    def __init__(self, rnaSeq, array, log, **kwargs):
+    __version__ = '0.0.1'
+
+    def __init__(self, rnaSeq, array, log, tags, output, **kwargs):
         logging.basicConfig(filename=log, filemode='a', level=logging.DEBUG,
                 format='[%(asctime)s] %(levelname)s: %(message)s')
         self.raw_df = pd.read_csv(rnaSeq, sep = "\t", low_memory=False)
+        self.raw_df.index = uniquify(self.raw_df['id'])
         self.sort_columns = set()
         self.filter = dict()
-        self.reset_cols()
         self.toggl_help(False)
         self.in_dialog = False
         self.pointer = 0
@@ -62,10 +96,26 @@ class App:
         self.lrpos = 0
         self.top = 0
         self.color_by = False
+        if not os.path.exists(tags):
+            logging.warning(f'The tags file "{tags}" dose not exist. '
+                           'Using default tags...')
+            self.tags = default_tags
+        else:
+            self.tags = yaml.load(tags)
+        if not os.path.exists(output):
+            logging.warning(f'The output file "{output}" dose not exist yet. '
+                           'Starting over...')
+            self.tag_data = dict()
+        else:
+            self.tag_data = yaml.load(output)
+        for tag in self.tags:
+            self.tag_data.setdefault(tag, dict())
+        self.reset_cols()
 
     def reset_cols(self):
         self.ordered_columns = [
             'id',
+            'quality',
             'gse',
             'technology',
             'status',
@@ -75,11 +125,12 @@ class App:
             'col',
             'val'
         ]
+        all_columns = list(self.raw_df.columns) + list(self.tags.keys())
         for col in self.ordered_columns:
-            if col not in self.raw_df.columns:
+            if col not in all_columns:
                 self.ordered_columns.remove(col)
         self.show_columns = set(self.ordered_columns)
-        for col in self.raw_df.columns:
+        for col in all_columns:
             if col not in self.ordered_columns:
                 self.ordered_columns.append(col)
 
@@ -91,6 +142,11 @@ class App:
 
     def update_df(self):
         r = self.raw_df.copy()
+        data_frames = [self.raw_df.copy()]
+        for col, tags in self.tag_data.items():
+            tagd = pd.DataFrame.from_dict(tags, orient='index', columns=[col])
+            data_frames.append(tagd)
+        r = pd.concat(data_frames, axis=1, join='outer')
         for col, filter in self.filter.items():
             r = r[r[col].astype(str).str.contains(filter)]
         if self.sort_columns:
@@ -284,6 +340,7 @@ class App:
 
     def _view_dialoge(self):
         table_y0 = 5
+        x0 = 6
         hight = min(len(self.ordered_columns)+table_y0+2, curses.LINES-4)
         width = min(self._window_width, curses.COLS-4)
         self.win = self.stdscr.subwin(hight, width, 2, 2)
@@ -298,7 +355,7 @@ class App:
             'c':'toggle color by',
             'shift+up/down':'change order'
         }
-        self.win.move(1, 3)
+        self.win.move(1, x0-2)
         for key, desc in buttons.items():
             hintlen = len(key)+len(desc)+4
             _, x = self.win.getyx()
@@ -313,7 +370,7 @@ class App:
             'sorted by':101,
             'color by':104
         }
-        self.win.move(2, 3)
+        self.win.move(2, x0-2)
         for lable, col in legend.items():
             hintlen = len(lable)+2
             _, x = self.win.getyx()
@@ -323,17 +380,17 @@ class App:
             self.win.addstr(lable, curses.color_pair(col))
         self.indentation = max(len(c) for c in self.ordered_columns)
         #self.win.addstr(2, 1, f'self.woffset: {self.woffset} hight:{hight}')
-        self.win.addstr(4, 5, 'column' + ' '*(self.indentation-5) + 'regex')
+        self.win.addstr(4, x0, 'column' + ' '*(self.indentation-5) + 'regex')
         self.woffset = max(0, self.col_pointer-hight+table_y0+3)
         for i, col in enumerate(self.ordered_columns):
             if i < self.woffset:
                 continue
             elif self.woffset > 0 and i == self.woffset:
-                self.win.addstr(table_y0, 5, '...'[:width-6])
+                self.win.addstr(table_y0, x0, '...'[:width-6])
                 continue
             ypos = i+table_y0-self.woffset
             if ypos+2 == hight:
-                self.win.addstr(ypos, 5, '...'[:width-6])
+                self.win.addstr(ypos, x0, '...'[:width-6])
                 break
             attr = curses.A_REVERSE if i==self.col_pointer else curses.A_NORMAL
             if col not in self.show_columns:
@@ -344,7 +401,9 @@ class App:
                 attr |= curses.color_pair(legend['sorted by'])
             filter = self.filter.get(col, '*')
             text = col + ' '*(self.indentation-len(col)+1) + filter
-            self.win.addstr(ypos, 5, text[:width-6], attr)
+            self.win.addstr(ypos, x0, text[:width-6], attr)
+            if col in self.tag_data:
+                self.win.addstr(ypos, 2, 'tag')
 
     def _dialog(self, c):
         cn = curses.keyname(c)
