@@ -37,15 +37,17 @@ tcolors = [196, 203, 202, 208, 178, 148, 106, 71, 31, 26]
 
 class App:
     def __init__(self, args):
-        self.rnaseq = pd.read_csv(args.rnaSeq, sep = "\t", low_memory=False)
-        self.show_now = 'selected_cols'
+        self.df = pd.read_csv(args.rnaSeq, sep = "\t", low_memory=False)
+        self.sort_columns = list()
         self.reset_selected_cols()
         self.toggl_help(False)
         self.in_dialog = False
         self.pointer = 0
+        self.col_pointer = 0
         self.selection = {self.pointer}
         self.lrpos = 0
         self.top = 0
+        self.update_current()
 
     def reset_selected_cols(self):
         self.colnames = ['gse', 'id', 'status', 'coarse.cell.type',
@@ -57,12 +59,12 @@ class App:
         else:
             self.print_help = not self.print_help
 
-    @property
-    def current(self):
-        if self.show_now == 'raw':
-            return self.rnaseq
-        elif self.show_now == 'selected_cols':
-            return self.rnaseq.loc[:, self.colnames]
+    def update_current(self):
+        r = self.df.copy()
+        if self.sort_columns:
+            r = r.sort_values(self.sort_columns)
+        r = r.loc[:, self.colnames]
+        self.current = r
 
     def header_body(self):
         df = self.current
@@ -74,7 +76,10 @@ class App:
 
     def _init_curses(self):
         curses.use_default_colors()
-        curses.init_pair(100, 2, -1) # button help
+        curses.init_pair(100, curses.COLOR_GREEN, -1)
+        curses.init_pair(101, curses.COLOR_BLUE, -1)
+        curses.init_pair(102, curses.COLOR_RED, -1)
+        curses.init_pair(103, curses.COLOR_WHITE, -1)
         for i, col in enumerate(tcolors):
             curses.init_pair(i+1, col, -1)
 
@@ -90,7 +95,8 @@ class App:
             padding = ' '*curses.COLS
             nlines = curses.LINES-6
             self.top = self.pointer if self.pointer < self.top else self.top
-            self.top = self.pointer - nlines if self.pointer >= self.top + nlines else self.top
+            self.top = self.pointer - nlines \
+                    if self.pointer >= self.top + nlines else self.top
             tabcols = curses.COLS
             cols = slice(self.lrpos, self.lrpos+tabcols)
             button = self.top + nlines
@@ -110,7 +116,8 @@ class App:
                               + padding)
             else:
                 stdscr.addstr(nlines+4, 0,
-                              f'selected: {len(self.selection)}' + ' '*curses.COLS)
+                              f'selected: {len(self.selection)}'
+                              + ' '*curses.COLS)
             if self.print_help:
                 self._print_help()
             if self.in_dialog:
@@ -217,7 +224,7 @@ class App:
             win.addstr(i, 5, '...'[:width-6])
 
     def _view_dialoge(self):
-        hight = min(100, curses.LINES-4)
+        hight = min(len(self.df.columns)+5, curses.LINES-4)
         width = min(80, curses.COLS-4)
         win = self.stdscr.subwin(hight, width, 2, 2)
         win.clear()
@@ -238,11 +245,50 @@ class App:
             win.addstr('  ')
             win.addstr(key+':', curses.color_pair(100))
             win.addstr(' '+desc)
+        legend = {
+            'legend:':103,
+            'deactivated':102,
+            'sorted by':101
+        }
+        win.move(2, 5)
+        for lable, col in legend.items():
+            hintlen = len(lable)+2
+            _, x = win.getyx()
+            if x+hintlen > width-2:
+                break
+            win.addstr('  ')
+            win.addstr(lable, curses.color_pair(col))
+        indentation = max(len(c) for c in self.df.columns)
+        offset = max(0, self.col_pointer-hight+6)
+        #win.addstr(2, 1, f'offset: {offset} hight:{hight}')
+        for i, col in enumerate(self.df.columns):
+            if i < offset:
+                continue
+            elif offset > 0 and i == offset:
+                win.addstr(3, 5, '...'[:width-6])
+                continue
+            ypos = i+3-offset
+            if ypos+2 == hight:
+                win.addstr(ypos, 5, '...'[:width-6])
+                break
+            attr = curses.A_REVERSE if i==self.col_pointer else curses.A_NORMAL
+            if col in self.sort_columns:
+                attr |= curses.color_pair(legend['sorted by'])
+            elif col not in self.colnames:
+                attr |= curses.color_pair(legend['deactivated'])
+            text = col + ' '*(indentation-len(col)+1) + f'text {i}'
+            win.addstr(ypos, 5, text[:width-6], attr)
 
     def _dialog(self, c):
         cn = curses.keyname(c)
         if cn == b'^[':
             self.in_dialog = False
+        elif c == curses.KEY_UP:
+            self.col_pointer -= 1
+            self.col_pointer %= len(self.df.columns)
+        elif c == curses.KEY_DOWN:
+            self.col_pointer += 1
+            self.col_pointer %= len(self.df.columns)
 
     helptext = """
         h           This help window.
