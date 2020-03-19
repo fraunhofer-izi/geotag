@@ -5,6 +5,7 @@ import curses
 from curses.textpad import Textbox, rectangle
 import time
 import locale
+import logging
 
 # use system default localization
 locale.setlocale(locale.LC_ALL, 'C')
@@ -12,7 +13,8 @@ code = locale.getpreferredencoding()
 
 def main():
     desc = 'Interface to quickly tag geo data sets.'
-    parser = argparse.ArgumentParser(description=desc)
+    parser = argparse.ArgumentParser(description=desc,
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--rnaSeq',
                         help='.RDS table containing the extraction status of '
                         'RNASeq studies.', type=str, metavar='path',
@@ -29,6 +31,15 @@ def main():
                         #'extraction_stats_array.tsv')
                         default="/home/dominik/rn_home/dominik.otto/Projects/"
                         "geotag/data/extraction_stats_array.tsv")
+    parser.add_argument('--user',
+                        help='The user name under which to write tags and log.',
+                        type=str, metavar='name',
+                        default=os.environ['USER'])
+    parser.add_argument('--log',
+                        help='The file path for the log.',
+                        type=str, metavar='path',
+                        default="/home/dominik/rn_home/dominik.otto/Projects/"
+                        f"geotag/data/{os.environ['USER']}.log")
     args = parser.parse_args()
     app = App(args)
     curses.wrapper(app.run)
