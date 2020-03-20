@@ -58,10 +58,9 @@ def main():
                         f"geotag/data/{os.environ['USER']}.pkl")
     parser.add_argument('--update',
                         help='Overwrite the cache.',
-                        action="store_true",
-                        type=str, metavar='bool')
+                        action="store_true")
     args = parser.parse_args()
-    if if not args.update and os.path.exists(args.state):
+    if not args.update and os.path.exists(args.state):
         app = pickle.load(open(args.state, 'r'))
         if app.__version__ != App.__version__:
             raise Exeption(f'The geotag version "{App.__version__}" differs '
@@ -120,13 +119,13 @@ class App:
                            'Using default tags...')
             self.tags = default_tags
         else:
-            self.tags = yaml.load(tags)
+            self.tags = yaml.load(tags, Loader=yaml.SafeLoader)
         if not os.path.exists(output):
             logging.warning(f'The output file "{output}" dose not exist yet. '
                            'Starting over...')
             self.tag_data = dict()
         else:
-            self.tag_data = yaml.load(output)
+            self.tag_data = yaml.load(output, Loader=yaml.SafeLoader)
         for tag in self.tags:
             self.tag_data.setdefault(tag, dict())
         self.reset_cols()
@@ -344,14 +343,15 @@ class App:
             message = box.gather()
 
     def _print_help(self):
-        hight = min(len(self.helptext), curses.LINES-4)
+        help = self.helptext
+        hight = min(len(help)+1, curses.LINES-4)
         width = min(80, curses.COLS-4)
         self.win = self.stdscr.subwin(hight, width, 2, 2)
         self.win.clear()
         self.win.border()
         for i in range(1, hight-1):
-            self.win.addstr(i, 5, self.helptext[i].strip()[:width-6])
-        if hight < len(self.helptext):
+            self.win.addstr(i, 5, help[i].strip()[:width-6])
+        if hight-1 < len(help):
             self.win.addstr(i, 1, ' '*(width-2))
             self.win.addstr(i, 5, '...'[:width-6])
 
@@ -509,7 +509,7 @@ class App:
                 self.color_by = col
             self._dialog_changed = True
 
-    helptext = """
+    _helptext = """
         h           This help window.
         q           Save and quit geotag.
         f           Filter dialoge.
@@ -528,6 +528,22 @@ class App:
 
         Ctrl+a      Select all.
         """.splitlines()
+
+    @property
+    def helptext(self):
+        h = self._helptext[:-1]
+        indent = 12
+        for tag, info in self.tags.items():
+            keys = list()
+            for c in info['key']:
+                if c == ord('^'):
+                    keys.append('Ctrl')
+                else:
+                    keys.append(chr(c))
+            keys = '+'.join(keys)
+            space = ' '*max(1, indent-len(keys))
+            h.append(keys+space+'Start tagging '+tag+'.')
+        return h
 
 if __name__ == "__main__":
     main()
