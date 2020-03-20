@@ -267,6 +267,11 @@ class Stack:
         if self.canredo():
             return ('Redo ' + self._redos[-1].text()).strip()
 
+    def text(self):
+        ''' Return a description of the last undoable action.. '''
+        if self.canundo():
+            return self._undos[-1].text().strip()
+
     @contextlib.contextmanager
     def _pausereceiver(self):
         ''' Return a contect manager which temporarily pauses the receiver. '''
