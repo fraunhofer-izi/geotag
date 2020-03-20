@@ -260,17 +260,12 @@ class Stack:
     def undotext(self):
         ''' Return a description of the next available undo. '''
         if self.canundo():
-            return ('Undo ' + self._undos[-1].text()).strip()
+            return self._undos[-1].text().strip()
 
     def redotext(self):
         ''' Return a description of the next available redo. '''
         if self.canredo():
-            return ('Redo ' + self._redos[-1].text()).strip()
-
-    def text(self):
-        ''' Return a description of the last undoable action.. '''
-        if self.canundo():
-            return self._undos[-1].text().strip()
+            return self._redos[-1].text().strip()
 
     @contextlib.contextmanager
     def _pausereceiver(self):
