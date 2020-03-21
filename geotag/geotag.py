@@ -94,7 +94,11 @@ def main():
         curses.wrapper(app.run)
     finally:
         print('Saving cache...')
-        del app.stdscr
+        for attr in ['stdscr', 'win']:
+            try:
+                delattr(app, attr)
+            except AttributeError:
+                pass
         with open(args.state, 'wb') as f:
             dill.dump(app, f)
 
@@ -103,12 +107,14 @@ default_tags = {
     'quality':{
         'type':int,
         'desc':'From 0 to 9.',
-        'key':b'\x1bq'
+        'key':b'\x1bq',
+        'col_width':8
     },
     'note':{
         'type':str,
         'desc':'A note.',
-        'key':b'\x1bn'
+        'key':b'\x1bn',
+        'col_width':20
     }
 }
 
@@ -143,6 +149,10 @@ class App:
         array_df = pd.read_csv(self.array, sep="\t", low_memory=False)
         self.raw_df = pd.concat([rnaSeq_df, array_df])
         self.raw_df.index = uniquify(self.raw_df['id'])
+        self._measured_col_width = dict()
+        for col in self.raw_df.columns:
+            l = self.raw_df[col].astype(str).map(len).max()
+            self._measured_col_width[col] = l
         self.sort_columns = set()
         self.filter = dict()
         self.toggl_help(False)
@@ -179,6 +189,12 @@ class App:
         self._update_now = True
         self.stale_lines = None
 
+    def col_widths(self):
+        for col, width in self._measured_col_width.items():
+            yield col, width
+        for tag, info in self.tags.items():
+            yield tag, info['col_width']
+
     def reset_cols(self):
         self.ordered_columns = ['id']
         self.ordered_columns += list(self.tags.keys())
@@ -214,7 +230,7 @@ class App:
             tagd = pd.DataFrame.from_dict(tags, orient='index', columns=[col],
                                           dtype=self.tags[col]['type'])
             data_frames.append(tagd)
-        r = pd.concat(data_frames, axis=1, join='outer')
+        r = pd.concat(data_frames, axis=1, join='outer').fillna('-')
         for col, filter in self.filter.items():
             r = r[r[col].astype(str).str.contains(filter)]
         if self.sort_columns:
@@ -236,7 +252,7 @@ class App:
         is_numeric_tag = self.tags.get(self.color_by, dict()).get('type') is int
         if is_numeric_tag or \
                 pd.api.types.is_numeric_dtype(r[self.color_by].dtype):
-            self.colmap = lambda x: 99 if np.isnan(x) else int(x%10)+1
+            self.colmap = lambda x: 99 if x=='-' else int(x%10)+1
         else:
             cmap = {key:i%10+1 for i, key in
                     enumerate(sorted(set(r[self.color_by])-{None}))}
@@ -245,25 +261,31 @@ class App:
     @property
     def formatters(self):
         formatters = dict()
-        def mk_formatter(tag, type):
-            if type is int:
-                str_len = max(4, len(tag))
-                def mstr(s):
-                    if np.isnan(s):
-                        return ' '*(str_len-1)+'-'
-                    return f'%{str_len}d' % s
+        for col, width in self.col_widths():
+            if col not in self.df:
+                continue
+            tag_dtype = self.tags.get(col, dict()).get('type')
+            if tag_dtype is int:
+                def formatter(s):
+                    if s=='-':
+                        return ' '*(width-1)+'-'
+                    text = f'%{width}d' % s
+                    if len(text)>width:
+                        return text[:(width-3)]+'...'
+                    return text
+            elif tag_dtype:
+                def formatter(s):
+                    text = str(s).strip().splitlines()[0]
+                    if len(text)>width:
+                        return text[:(width-3)]+'...'
+                    return text.rjust(width)
             else:
-                str_len = max(20, len(tag)-1)
-                def mstr(s):
-                    return str(s).rjust(str_len, ' ')
-            def formatter(s):
-                text = mstr(s)
-                if len(text)>str_len:
-                    return text[:(str_len-3)]+'...'
-                return text
-            return formatter
-        for tag, info in self.tags.items():
-            formatters[tag] = mk_formatter(tag, info['type'])
+                def formatter(s):
+                    text = str(s).strip().splitlines()[0]
+                    if len(text)>width:
+                        return text[:(width-3)]+'...'
+                    return text.rjust(width)
+            formatters[col] = formatter
         return formatters
 
     def header_body(self):
@@ -479,7 +501,7 @@ class App:
         width = min(80, curses.COLS-4)
         editwin = curses.newwin(hight-3, width-3, 3, 3)
         rectangle(self.stdscr, 2, 2, hight, width)
-        ids = self._id_for_index(sorted(list(self.selection)))
+        ids = self._id_for_index(list(self.selection))
         if len(ids)>1:
             id = f'[{ids[0]} ...]'
         else:
@@ -487,10 +509,20 @@ class App:
         text = f"Enter {tag} for {id}: (hit Ctrl-G to send)"
         self.stdscr.addstr(2, 4, text[:(width-4)])
         self.stdscr.refresh()
+        current_texts = self.get_current_values(tag)
+        if len(current_texts) > 1:
+            current_text = 'different text for selection'
+        elif current_texts:
+            current_text = current_texts.pop()
+        else:
+            current_text = None
+        if current_text:
+            editwin.addstr(str(current_text))
         box = Textbox(editwin)
         box.edit()
-        message = box.gather()
-        self.set_tag(tag, message, self._view_state)
+        message = box.gather().strip()
+        if message != current_text:
+            self.set_tag(tag, message, self._view_state)
 
     def _id_for_index(self, index):
         return self.df["id"].iloc[index]
@@ -518,13 +550,19 @@ class App:
         for key, value in new_state.items():
             setattr(self, key, value)
 
+    def get_current_values(self, tag):
+        selection = list(self.selection)
+        ids = self._id_for_index(selection)
+        td = self.tag_data[tag]
+        return {td[id] for id in ids if id in td}
+
     @undoable
     def set_tag(self, tag, val, view_state):
         self._view_state = view_state
         lselected = list(self.selection)
         ids = self._id_for_index(lselected)
         td = self.tag_data[tag]
-        current = {id:td.get(id) for id in ids}
+        current =  {id:td.get(id) for id in ids}
         if self.tags[tag]['type'] is str:
             log_val = val.splitlines()[0]
             if len(log_val) > 20:
@@ -561,22 +599,20 @@ class App:
         self._view_state = view_state
 
     def save_tag_data(self):
-        with open(self.output, 'w') as f:
-            f.write(yaml.dump(self.tag_data))
-        #last_pid = self.last_saver_pid
-        #self.last_saver_pid = os.fork()
-        #if self.last_saver_pid == 0:
-        #    if last_pid is not None:
-        #        try:
-        #            os.waitpid(last_pid, 0)
-        #        except ChildProcessError:
-        #            pass
-        #    try:
-        #        with open(self.output, 'w') as f:
-        #            f.write(yaml.dump(self.tag_data))
-        #    except:
-        #        os._exit(1)
-        #    os._exit(0)
+        last_pid = self.last_saver_pid
+        self.last_saver_pid = os.fork()
+        if self.last_saver_pid == 0:
+            if last_pid is not None:
+                try:
+                    os.waitpid(last_pid, 0)
+                except ChildProcessError:
+                    pass
+            try:
+                with open(self.output, 'w') as f:
+                    f.write(yaml.dump(self.tag_data))
+            except:
+                os._exit(1)
+            os._exit(0)
 
     def _print_help(self):
         help = self.helptext
