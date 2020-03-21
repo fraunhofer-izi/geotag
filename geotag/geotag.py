@@ -98,6 +98,12 @@ def uniquify(vals):
         yield newitem
         seen.add(newitem)
 
+def keypartmap(c):
+    if c == 27:
+        return 'Alt'
+    else:
+        return chr(c)
+
 class App:
     __version__ = '0.0.1'
 
@@ -649,17 +655,7 @@ class App:
         h = self._helptext[:]
         indent = 12
         for tag, info in self.tags.items():
-            keys = list()
-            lower = False
-            for c in info['key']:
-                if c == ord('^'):
-                    keys.append('Ctrl')
-                    lower = True
-                elif lower:
-                    keys.append(chr(c).lower())
-                else:
-                    keys.append(chr(c))
-            keys = '+'.join(keys)
+            keys = '+'.join(keypartmap(c) for c in info['key'])
             space = ' '*max(1, indent-len(keys))
             if info['type'] is str:
                 h.append(keys+space+'Make a '+tag+'.')
