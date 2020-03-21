@@ -144,7 +144,6 @@ def group(desc):
     '''
     return _Group(desc)
 
-
 class Stack:
     ''' The main undo stack. 
         

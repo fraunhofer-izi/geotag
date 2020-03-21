@@ -1,4 +1,5 @@
 import os
+import dill
 import argparse
 import pandas as pd
 import numpy as np
@@ -63,15 +64,39 @@ def main():
                         action="store_true")
     args = parser.parse_args()
     if not args.update and os.path.exists(args.state):
-        app = pickle.load(open(args.state, 'r'))
+        try:
+            with open(args.state, 'rb') as f:
+                app = dill.load(f)
+        except Exception as e:
+            print('Failed to load previos state. Pass --update to overwrite.')
+            raise
         if app.__version__ != App.__version__:
-            raise Exeption(f'The geotag version "{App.__version__}" differs '
-                    'from version of the cache "{app.__version__}". '
+            raise Exception(f'The geotag version "{App.__version__}" differs '
+                    f'from version of the cache "{app.__version__}". '
                     'Pass the parameter --update if you want to overwrite it.')
-        # transfer attributes
+        if app.array != args.array:
+            raise Exception(f'The sellected array db "{args.array}" differs '
+                            f'from the one saved in state "{app.array}".'
+                            'Pass the parameter --update if you want to '
+                            'overwrite the stae.')
+        if app.rnaSeq != args.rnaSeq:
+            raise Exception(f'The sellected rnaSeq db "{args.rnaSeq}" differs '
+                            f'from the one saved in state "{app.rnaSeq}".'
+                            'Pass the parameter --update if you want to '
+                            'overwrite the stae.')
+        app.log = args.log
+        app.output = args.output
+        app.tags = args.tags
+        app.user = args.user
     else:
         app = App(**vars(args))
-    curses.wrapper(app.run)
+    try:
+        curses.wrapper(app.run)
+    finally:
+        print('Saving cache...')
+        del app.stdscr
+        with open(args.state, 'wb') as f:
+            dill.dump(app, f)
 
 tcolors = [196, 203, 202, 208, 178, 148, 106, 71, 31, 26]
 default_tags = {
@@ -110,9 +135,14 @@ class App:
     def __init__(self, rnaSeq, array, log, tags, output, **kwargs):
         logging.basicConfig(filename=log, filemode='a', level=logging.DEBUG,
                 format='[%(asctime)s] %(levelname)s: %(message)s')
-        self.raw_df = pd.read_csv(rnaSeq, sep = "\t", low_memory=False)
+        self.array = array
+        self.rnaSeq = rnaSeq
+        self.output = output
+        self.tags_file = tags
+        rnaSeq_df = pd.read_csv(self.rnaSeq, sep="\t", low_memory=False)
+        array_df = pd.read_csv(self.array, sep="\t", low_memory=False)
+        self.raw_df = pd.concat([rnaSeq_df, array_df])
         self.raw_df.index = uniquify(self.raw_df['id'])
-        self.undostack = stack()
         self.sort_columns = set()
         self.filter = dict()
         self.toggl_help(False)
@@ -122,6 +152,7 @@ class App:
         self.selection = {self.pointer}
         self.lrpos = 0
         self.top = 0
+        self.last_saver_pid = None
         self.color_by = 'quality'
         self.current_tag = 'quality'
         if not os.path.exists(tags):
@@ -129,22 +160,29 @@ class App:
                            'Using default tags...')
             self.tags = default_tags
         else:
-            self.tags = yaml.load(tags, Loader=yaml.SafeLoader)
-        if not os.path.exists(output):
-            logging.warning(f'The output file "{output}" dose not exist yet. '
-                           'Starting over...')
+            with open(self.tags_file, 'rb') as f:
+                self.tags = yaml.load(f, Loader=yaml.SafeLoader)
+        if not os.path.exists(self.output):
+            logging.warning(f'The output file "{self.output}" dose not exist '
+                            'yet. Starting over...')
             self.tag_data = dict()
         else:
-            self.tag_data = yaml.load(output, Loader=yaml.SafeLoader)
+            with open(self.output, 'rb') as f:
+                self.tag_data = yaml.load(f, Loader=yaml.SafeLoader)
+            if not isinstance(self.tag_data, dict):
+                logging.warning(f'The loaded {self.output} is no dict '
+                                'and will be resetted.')
+                self.tag_data = dict()
         for tag in self.tags:
             self.tag_data.setdefault(tag, dict())
         self.reset_cols()
+        self._update_now = True
+        self.stale_lines = None
 
     def reset_cols(self):
-        self.ordered_columns = [
-            'id',
-            'quality',
-            'note',
+        self.ordered_columns = ['id']
+        self.ordered_columns += list(self.tags.keys())
+        self.ordered_columns += [
             'gse',
             'technology',
             'status',
@@ -176,7 +214,7 @@ class App:
             tagd = pd.DataFrame.from_dict(tags, orient='index', columns=[col],
                                           dtype=self.tags[col]['type'])
             data_frames.append(tagd)
-        r = pd.concat(data_frames, axis=1, join='outer').replace({np.nan: None})
+        r = pd.concat(data_frames, axis=1, join='outer')
         for col, filter in self.filter.items():
             r = r[r[col].astype(str).str.contains(filter)]
         if self.sort_columns:
@@ -198,22 +236,52 @@ class App:
         is_numeric_tag = self.tags.get(self.color_by, dict()).get('type') is int
         if is_numeric_tag or \
                 pd.api.types.is_numeric_dtype(r[self.color_by].dtype):
-            self.colmap = lambda x: int(x%10)+1
+            self.colmap = lambda x: 99 if np.isnan(x) else int(x%10)+1
         else:
             cmap = {key:i%10+1 for i, key in
                     enumerate(sorted(set(r[self.color_by])-{None}))}
             self.colmap = cmap.get
 
-    def header_body(self, update=True):
-        if update:
-            self.update_df()
-        lines = self.df.to_string(index=False).splitlines()
+    @property
+    def formatters(self):
+        formatters = dict()
+        def mk_formatter(tag, type):
+            if type is int:
+                str_len = max(4, len(tag))
+                def mstr(s):
+                    if np.isnan(s):
+                        return ' '*(str_len-1)+'-'
+                    return f'%{str_len}d' % s
+            else:
+                str_len = max(20, len(tag)-1)
+                def mstr(s):
+                    return str(s).rjust(str_len, ' ')
+            def formatter(s):
+                text = mstr(s)
+                if len(text)>str_len:
+                    return text[:(str_len-3)]+'...'
+                return text
+            return formatter
+        for tag, info in self.tags.items():
+            formatters[tag] = mk_formatter(tag, info['type'])
+        return formatters
+
+    def header_body(self):
+        self.update_df()
+        lines = self.df.to_string(index=False, max_colwidth=80,
+                                  formatters=self.formatters).splitlines()
         header = lines[0]
         lines = lines[1:]
         return header, lines
 
+    def these_lines(self, lines):
+        rdf = self.df.iloc[lines, :]
+        return rdf.to_string(index=False, max_colwidth=80, header=False,
+                             formatters=self.formatters).splitlines()
+
     def _init_curses(self):
         curses.use_default_colors()
+        curses.init_pair(99, -1, -1)
         curses.init_pair(100, curses.COLOR_GREEN, -1)
         curses.init_pair(101, curses.COLOR_BLUE, -1)
         curses.init_pair(102, curses.COLOR_RED, -1)
@@ -230,15 +298,17 @@ class App:
                 self.pointer = 0
                 self.selection = {self.pointer}
         else:
-            self.header, self.lines = self.header_body(False)
+            locs = list(line_numbers)
+            new_lines = self.these_lines(locs)
+            for i, j in enumerate(locs):
+                self.lines[j] = new_lines[i]
 
     def run(self, stdscr):
         self._init_curses()
         self.stdscr = stdscr
-        message = ''
         cn = None
-        self._update_now = True
-        self.stale_lines = None
+        stdscr.addstr('Loading...')
+        stdscr.refresh()
         while True:
             if self._update_now:
                 self._update_content(self.stale_lines)
@@ -267,12 +337,12 @@ class App:
             if cn:
                 stdscr.addstr(' key: ', curses.color_pair(100))
                 stdscr.addstr(str(cn))
-            if self.undostack.canundo():
+            if stack().canundo():
                 stdscr.addstr(' undoable: ', curses.color_pair(100))
-                stdscr.addstr(self.undostack.undotext())
-            if self.undostack.canredo():
+                stdscr.addstr(stack().undotext())
+            if stack().canredo():
                 stdscr.addstr(' redoable: ', curses.color_pair(100))
-                stdscr.addstr(self.undostack.redotext())
+                stdscr.addstr(stack().redotext())
             _, x = stdscr.getyx()
             stdscr.addstr(' '*(curses.COLS-x-1))
             if self.print_help:
@@ -385,10 +455,10 @@ class App:
             self.top = self.total_lines-nlines-1
             self.pointer = self.total_lines-1
             self.selection = {self.pointer}
-        elif cn == b'u' and self.undostack.canundo():
-            self.undostack.undo()
-        elif cn == b'r' and self.undostack.canredo():
-            self.undostack.redo()
+        elif cn == b'u' and stack().canundo():
+            stack().undo()
+        elif cn == b'r' and stack().canredo():
+            stack().redo()
         else:
             if self.tags[self.current_tag]['type'] is int \
                     and cn in self._byte_numbers:
@@ -405,9 +475,17 @@ class App:
                         self.make_str(tag)
 
     def make_str(self, tag):
-        editwin = curses.newwin(10, 77, 3, 3)
-        rectangle(self.stdscr, 2, 2, 13, 80)
-        self.stdscr.addstr(2, 4, f"Enter {tag}: (hit Ctrl-G to send)")
+        hight = min(23, curses.LINES-4)
+        width = min(80, curses.COLS-4)
+        editwin = curses.newwin(hight-3, width-3, 3, 3)
+        rectangle(self.stdscr, 2, 2, hight, width)
+        ids = self._id_for_index(sorted(list(self.selection)))
+        if len(ids)>1:
+            id = f'[{ids[0]} ...]'
+        else:
+            id = ids[0]
+        text = f"Enter {tag} for {id}: (hit Ctrl-G to send)"
+        self.stdscr.addstr(2, 4, text[:(width-4)])
         self.stdscr.refresh()
         box = Textbox(editwin)
         box.edit()
@@ -449,13 +527,15 @@ class App:
         current = {id:td.get(id) for id in ids}
         if self.tags[tag]['type'] is str:
             log_val = val.splitlines()[0]
+            if len(log_val) > 20:
+                log_val = log_val[:17]+'...'
         else:
             log_val = val
         if len(ids) == 1:
             id = next(iter(ids))
             short_desc = long_desc = f'setting tag "{tag}" to '\
                                      f'"{log_val}" for {id}'
-            short_desc = f'{tag}={log_val} for id'
+            short_desc = f'{tag}={log_val} for {id}'
         else:
             lids = list(ids)
             long_desc = f'setting tag "{tag}" to "{log_val}" for {lids}'
@@ -463,17 +543,40 @@ class App:
         logging.info(long_desc)
         for id, index in zip(ids, lselected):
             td[id] = val
-            self.df[tag].iloc[index] = val
+            self.df.loc[self.df.index[index], tag] = val
+        self.save_tag_data()
         self.stale_lines = self.selection
         self._update_now = True
         yield short_desc
         logging.info('undoing '+long_desc)
         for ind, (id, v) in enumerate(current.items()):
-            td[id] = v
-            self.df[tag].iloc[lselected[ind]] = v
+            if v is None or np.isnan(v):
+                del td[id]
+            else:
+                td[id] = v
+            self.df.loc[self.df.index[lselected[ind]], tag] = v
+        self.save_tag_data()
         self.stale_lines = view_state['selection']
         self._update_now = True
         self._view_state = view_state
+
+    def save_tag_data(self):
+        with open(self.output, 'w') as f:
+            f.write(yaml.dump(self.tag_data))
+        #last_pid = self.last_saver_pid
+        #self.last_saver_pid = os.fork()
+        #if self.last_saver_pid == 0:
+        #    if last_pid is not None:
+        #        try:
+        #            os.waitpid(last_pid, 0)
+        #        except ChildProcessError:
+        #            pass
+        #    try:
+        #        with open(self.output, 'w') as f:
+        #            f.write(yaml.dump(self.tag_data))
+        #    except:
+        #        os._exit(1)
+        #    os._exit(0)
 
     def _print_help(self):
         help = self.helptext
