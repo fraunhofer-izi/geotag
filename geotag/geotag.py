@@ -144,6 +144,7 @@ class App:
         self.ordered_columns = [
             'id',
             'quality',
+            'note',
             'gse',
             'technology',
             'status',
@@ -172,7 +173,8 @@ class App:
         r = self.raw_df.copy()
         data_frames = [self.raw_df.copy()]
         for col, tags in self.tag_data.items():
-            tagd = pd.DataFrame.from_dict(tags, orient='index', columns=[col])
+            tagd = pd.DataFrame.from_dict(tags, orient='index', columns=[col],
+                                          dtype=self.tags[col]['type'])
             data_frames.append(tagd)
         r = pd.concat(data_frames, axis=1, join='outer').replace({np.nan: None})
         for col, filter in self.filter.items():
@@ -383,16 +385,6 @@ class App:
             self.top = self.total_lines-nlines-1
             self.pointer = self.total_lines-1
             self.selection = {self.pointer}
-        elif cn == b'n':
-            self.stdscr.addstr(0, 0, "Enter IM message: (hit Ctrl-G to send)")
-            editwin = curses.newwin(5,30, 2,1)
-            rectangle(self.stdscr, 1,0, 1+5+1, 1+30+1)
-            self.stdscr.refresh()
-            box = Textbox(editwin)
-            # Let the user edit until Ctrl-G is struck.
-            box.edit()
-            # Get resulting contents
-            message = box.gather()
         elif cn == b'u' and self.undostack.canundo():
             self.undostack.undo()
         elif cn == b'r' and self.undostack.canredo():
@@ -405,8 +397,22 @@ class App:
                 return
             for tag, info in self.tags.items():
                 if cn == info['key']:
-                    logging.info(f'Starting to tag {tag}.')
-                    self.current_tag = tag
+                    if info['type'] is int:
+                        logging.info(f'Starting to tag {tag}.')
+                        self.current_tag = tag
+                    elif info['type'] is str:
+                        logging.info(f'Starting make a {tag}.')
+                        self.make_str(tag)
+
+    def make_str(self, tag):
+        editwin = curses.newwin(10, 77, 3, 3)
+        rectangle(self.stdscr, 2, 2, 13, 80)
+        self.stdscr.addstr(2, 4, f"Enter {tag}: (hit Ctrl-G to send)")
+        self.stdscr.refresh()
+        box = Textbox(editwin)
+        box.edit()
+        message = box.gather()
+        self.set_tag(tag, message, self._view_state)
 
     def _id_for_index(self, index):
         return self.df["id"].iloc[index]
@@ -441,14 +447,19 @@ class App:
         ids = self._id_for_index(lselected)
         td = self.tag_data[tag]
         current = {id:td.get(id) for id in ids}
+        if self.tags[tag]['type'] is str:
+            log_val = val.splitlines()[0]
+        else:
+            log_val = val
         if len(ids) == 1:
             id = next(iter(ids))
-            short_desc = long_desc = f'setting tag "{tag}" to "{val}" for {id}'
-            short_desc = f'{tag}={val} for id'
+            short_desc = long_desc = f'setting tag "{tag}" to '\
+                                     f'"{log_val}" for {id}'
+            short_desc = f'{tag}={log_val} for id'
         else:
             lids = list(ids)
-            long_desc = f'setting tag "{tag}" to "{val}" for {lids}'
-            short_desc = f'{tag}={val} for [{lids[0]}, ...]'
+            long_desc = f'setting tag "{tag}" to "{log_val}" for {lids}'
+            short_desc = f'{tag}={log_val} for [{lids[0]}, ...]'
         logging.info(long_desc)
         for id, index in zip(ids, lselected):
             td[id] = val
@@ -560,7 +571,7 @@ class App:
             editwin = self.stdscr.subwin(1, width, ypos, xpos)
             editwin.addstr(0, 0, self.filter.get(col, ''))
             self.stdscr.refresh()
-            box = curses.textpad.Textbox(editwin)
+            box = Textbox(editwin)
             box.edit()
             filter = box.gather().strip()
             if filter not in ['*', '']:
@@ -602,26 +613,35 @@ class App:
                 logging.info(f'Sort by "{col}".')
                 self.sort_columns.add(col)
             self._dialog_changed = True
-        elif cn == b'KEY_SR' or cn == b'A':
+        elif cn == b'KEY_SR' or cn == b'\x1b[1;2A':
             col_val = self.ordered_columns[self.col_pointer]
             logging.info(f'Moving column "{col_val}" up.')
             col_pos = self.col_pointer
             self.col_pointer -= 1
-            self.col_pointer %= len(self.ordered_columns)
-            self.ordered_columns[col_pos] = \
-                    self.ordered_columns[self.col_pointer]
-            self.ordered_columns[self.col_pointer] = col_val
-            self._dialog_changed = True
-        elif cn == b'KEY_SF' or cn == b'B': # Shift + Down
+            if self.col_pointer < 0:
+                self.col_pointer = len(self.ordered_columns)-1
+                self.ordered_columns.remove(col_val)
+                self.ordered_columns.append(col_val)
+            else:
+                self.ordered_columns[col_pos] = \
+                        self.ordered_columns[self.col_pointer]
+                self.ordered_columns[self.col_pointer] = col_val
+                self._dialog_changed = True
+        elif cn == b'KEY_SR' or cn == b'\x1b[1;2B':
             col_val = self.ordered_columns[self.col_pointer]
             logging.info(f'Moving column "{col_val}" down.')
             col_pos = self.col_pointer
             self.col_pointer += 1
-            self.col_pointer %= len(self.ordered_columns)
-            self.ordered_columns[col_pos] = \
-                    self.ordered_columns[self.col_pointer]
-            self.ordered_columns[self.col_pointer] = col_val
-            self._dialog_changed = True
+            if self.col_pointer >= len(self.ordered_columns):
+                self.col_pointer = 0
+                self.ordered_columns.remove(col_val)
+                self.ordered_columns = [col_val] + self.ordered_columns
+                del self.ordered_columns[-1]
+            else:
+                self.ordered_columns[col_pos] = \
+                        self.ordered_columns[self.col_pointer]
+                self.ordered_columns[self.col_pointer] = col_val
+                self._dialog_changed = True
         elif cn == b'c':
             col = self.ordered_columns[self.col_pointer]
             logging.info(f'Coloring by "{col}".')
