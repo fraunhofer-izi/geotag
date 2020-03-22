@@ -1,5 +1,5 @@
 import os
-import dill
+import pickle
 import argparse
 import pandas as pd
 import numpy as np
@@ -63,44 +63,19 @@ def main():
                         help='Overwrite the cache.',
                         action="store_true")
     args = parser.parse_args()
+    app = App(**vars(args))
     if not args.update and os.path.exists(args.state):
         try:
             with open(args.state, 'rb') as f:
-                app = dill.load(f)
+                app.cache = pickle.load(f)
         except Exception as e:
             print('Failed to load previos state. Pass --update to overwrite.')
             raise
-        if app.__version__ != App.__version__:
-            raise Exception(f'The geotag version "{App.__version__}" differs '
-                    f'from version of the cache "{app.__version__}". '
-                    'Pass the parameter --update if you want to overwrite it.')
-        if app.array != args.array:
-            raise Exception(f'The sellected array db "{args.array}" differs '
-                            f'from the one saved in state "{app.array}".'
-                            'Pass the parameter --update if you want to '
-                            'overwrite the stae.')
-        if app.rnaSeq != args.rnaSeq:
-            raise Exception(f'The sellected rnaSeq db "{args.rnaSeq}" differs '
-                            f'from the one saved in state "{app.rnaSeq}".'
-                            'Pass the parameter --update if you want to '
-                            'overwrite the stae.')
-        app.log = args.log
-        app.output = args.output
-        app.tags = args.tags
-        app.user = args.user
-    else:
-        app = App(**vars(args))
     try:
         curses.wrapper(app.run)
     finally:
-        print('Saving cache...')
-        for attr in ['stdscr', 'win']:
-            try:
-                delattr(app, attr)
-            except AttributeError:
-                pass
         with open(args.state, 'wb') as f:
-            dill.dump(app, f)
+            pickle.dump(app.cache, f)
 
 tcolors = [196, 203, 202, 208, 178, 148, 106, 71, 31, 26]
 default_tags = {
@@ -354,8 +329,11 @@ class App:
             if stack().canredo():
                 stdscr.addstr(' redoable: ', curses.color_pair(100))
                 stdscr.addstr(stack().redotext())
-            _, x = stdscr.getyx()
+            y, x = stdscr.getyx()
             stdscr.addstr(' '*(curses.COLS-x-1))
+            if y < curses.LINES-1:
+                # clear last line
+                stdscr.addstr(' '*(curses.COLS-1))
             if self.print_help:
                 self._print_help()
             if self.in_dialog:
@@ -410,7 +388,7 @@ class App:
                 continue
             if self.coloring_now in self.df.columns:
                 val = self.df[self.coloring_now].iloc[pos]
-                if val:
+                if val is not None:
                     col = self.colmap(val)
                     attr |= curses.color_pair(col)
             text = lines[pos]+padding
@@ -436,10 +414,18 @@ class App:
             self.pointer %= self.total_lines
             self.selection = {self.pointer}
         elif cn == b'KEY_SR' or cn == b'\x1b[1;2A':
-            self.pointer = max(min(self.selection) - 1, 0)
+            old_pointer = self.pointer
+            self.pointer -= 1
+            self.pointer %= self.total_lines
+            if self.pointer in self.selection:
+                self.selection.remove(old_pointer)
             self.selection.add(self.pointer)
         elif cn == b'KEY_SF' or cn == b'\x1b[1;2B': # Shift + Down
-            self.pointer = min(max(self.selection) + 1, self.total_lines-1)
+            old_pointer = self.pointer
+            self.pointer += 1
+            self.pointer %= self.total_lines
+            if self.pointer in self.selection:
+                self.selection.remove(old_pointer)
             self.selection.add(self.pointer)
         elif cn == b'KEY_LEFT':
             if self.lrpos > 0:
@@ -450,15 +436,52 @@ class App:
             self.lrpos += 1
         elif cn == b'KEY_SRIGHT' or cn == b'\x1b[1;2C':
             self.lrpos = self.lrpos + int(tabcols/2)
-        elif cn == b'KEY_NPAGE':
-            self.top += nlines
-            self.pointer = min(self.top, self.total_lines-1)
-            self.top = min(self.total_lines-nlines-1, self.top)
-            self.selection = {self.pointer}
         elif cn == b'KEY_PPAGE':
             self.top = max(self.top-nlines, 0)
             self.pointer = self.top
             self.selection = {self.pointer}
+        elif cn == b'KEY_NPAGE':
+            top = self.top + nlines
+            self.pointer = min(top, self.total_lines-1)
+            self.top = min(self.total_lines-nlines-1, top)
+            self.selection = {self.pointer}
+        elif cn == b'\x1b[5;2~': # Shift + PageUp
+            self.top = max(self.top-nlines, 0)
+            old_pointer = self.pointer
+            self.pointer = max(self.pointer-nlines, self.top)
+            new_sel = iter(range(old_pointer-1, self.pointer, -1))
+            try:
+                line = next(new_sel)
+                if line in self.selection:
+                    self.selection.remove(old_pointer)
+                while line in self.selection:
+                    self.selection.remove(line)
+                    line = next(new_sel)
+                while True:
+                    self.selection.add(line)
+                    line = next(new_sel)
+            except StopIteration:
+                pass
+            self.selection.add(self.pointer)
+        elif cn == b'\x1b[6;2~': # Shift + PageDown
+            top = self.top + nlines
+            old_pointer = self.pointer
+            self.pointer = min(old_pointer+nlines, self.total_lines-1)
+            self.top = min(self.total_lines-nlines-1, top)
+            new_sel = iter(range(old_pointer+1, self.pointer))
+            try:
+                line = next(new_sel)
+                if line in self.selection:
+                    self.selection.remove(old_pointer)
+                while line in self.selection:
+                    self.selection.remove(line)
+                    line = next(new_sel)
+                while True:
+                    self.selection.add(line)
+                    line = next(new_sel)
+            except StopIteration:
+                pass
+            self.selection.add(self.pointer)
         elif cn == b'KEY_HOME':
             self.pointer = self.top = 0
             self.selection = {self.pointer}
@@ -537,6 +560,14 @@ class App:
                 self._update_now = True
         for key, value in new_state.items():
             setattr(self, key, value)
+
+    @property
+    def cache(self):
+        return {'_view_state': self._view_state}
+
+    @cache.setter
+    def cache(self, cache):
+        self._view_state = cache.get('_view_state')
 
     def get_current_values(self, tag):
         selection = list(self.selection)
@@ -778,28 +809,30 @@ class App:
             self._dialog_changed = True
 
     _helptext = """
-        h           Show/hide help window.
-        q           Save and quit geotag.
-        f           Filter dialoge.
-        Up          Move upward.
-        Down        Move downward.
-        Pageup      Move upward one page.
-        Pagedown    Move down one page.
-        Shift+Up    Select upward.
-        Shift+Down  Select downward.
-        Left        Move to the left hand side.
-        Right       Move to the right hand side.
-        Shift+Left  Move to the left by half a page.
-        Shift+Right Move to the right by half a page.
-        Home        Move to the start of the table.
-        End         Move to the end of the table.
-        Ctrl+a      Select all.
+        h             Show/hide help window.
+        q             Save and quit geotag.
+        f             Filter dialoge.
+        Up            Move upward.
+        Down          Move downward.
+        Shift+Up      Select upward.
+        Shift+Down    Select downward.
+        Pageup        Move upward one page.
+        Pagedown      Move down one page.
+        Shift+Pageup  Move upward one page.
+        ShiftPagedown Move down one page.
+        Left          Move to the left hand side.
+        Right         Move to the right hand side.
+        Shift+Left    Move to the left by half a page.
+        Shift+Right   Move to the right by half a page.
+        Home          Move to the start of the table.
+        End           Move to the end of the table.
+        Ctrl+a        Select all.
         """.splitlines()
 
     @property
     def helptext(self):
         h = self._helptext[:]
-        indent = 12
+        indent = 14
         for tag, info in self.tags.items():
             keys = '+'.join(keypartmap(c) for c in info['key'])
             space = ' '*max(1, indent-len(keys))
