@@ -54,6 +54,11 @@ def main():
                         type=str, metavar='path.yml',
                         default="/home/dominik/rn_home/dominik.otto/Projects/"
                         f"geotag/data/{os.environ['USER']}.yml")
+    parser.add_argument('--softPath',
+                        help='Path to the soft file directory.',
+                        type=str, metavar='path.yml',
+                        default="/mnt/ribolution/user_worktmp/dominik.otto/"
+                        "tumor-deconvolution-dream-challenge/soft-files")
     parser.add_argument('--state',
                         help='Path to a cached state of geotag.',
                         type=str, metavar='path.pkl',
@@ -63,6 +68,8 @@ def main():
                         help='Overwrite the cache.',
                         action="store_true")
     args = parser.parse_args()
+    if not os.environ.get('TMUX'):
+        raise Exception('Please run geotag inside a tmux.')
     app = App(**vars(args))
     if not args.update and os.path.exists(args.state):
         try:
@@ -72,8 +79,10 @@ def main():
             print('Failed to load previos state. Pass --update to overwrite.')
             raise
     try:
+        print('Starting curses app ...')
         curses.wrapper(app.run)
     finally:
+        print('Saving last state ...')
         with open(args.state, 'wb') as f:
             pickle.dump(app.cache, f)
 
@@ -113,13 +122,16 @@ def keypartmap(c):
 class App:
     __version__ = '0.0.1'
 
-    def __init__(self, rnaSeq, array, log, tags, output, **kwargs):
+    def __init__(self, rnaSeq, array, log, tags, output, softPath=None,
+                 **kwargs):
         logging.basicConfig(filename=log, filemode='a', level=logging.DEBUG,
                 format='[%(asctime)s] %(levelname)s: %(message)s')
         self.array = array
         self.rnaSeq = rnaSeq
         self.output = output
+        self.softPath = softPath
         self.tags_file = tags
+        print('Loading data ...')
         rnaSeq_df = pd.read_csv(self.rnaSeq, sep="\t", low_memory=False)
         array_df = pd.read_csv(self.array, sep="\t", low_memory=False)
         self.raw_df = pd.concat([rnaSeq_df, array_df])
@@ -147,14 +159,14 @@ class App:
             self.tags = default_tags
         else:
             with open(self.tags_file, 'rb') as f:
-                self.tags = yaml.load(f, Loader=yaml.SafeLoader)
+                self.tags = yaml.load(f, Loader=yaml.FullLoader)
         if not os.path.exists(self.output):
             logging.warning(f'The output file "{self.output}" dose not exist '
                             'yet. Starting over...')
             self.tag_data = dict()
         else:
             with open(self.output, 'rb') as f:
-                self.tag_data = yaml.load(f, Loader=yaml.SafeLoader)
+                self.data = yaml.load(f, Loader=yaml.FullLoader)
             if not isinstance(self.tag_data, dict):
                 logging.warning(f'The loaded {self.output} is no dict '
                                 'and will be resetted.')
@@ -292,7 +304,7 @@ class App:
         self._init_curses()
         self.stdscr = stdscr
         cn = None
-        stdscr.addstr('Loading...')
+        stdscr.addstr('Loading visualization ...')
         stdscr.refresh()
         while True:
             if self._update_now:
@@ -350,6 +362,7 @@ class App:
     _control_seq_parts = _byte_numbers.copy()
     _control_seq_parts.add(b';')
     _control_seq_parts.add(b'[')
+    _required_columns = {'id', 'gse'}
 
     def get_key(self, win):
         def get():
@@ -493,6 +506,19 @@ class App:
             stack().undo()
         elif cn == b'r' and stack().canredo():
             stack().redo()
+        elif cn == b'\n':
+            index = list(self.selection)
+            gse = self.df["gse"].iloc[index[0]]
+            file = os.path.join(self.softPath, gse, gse+'_family.soft')
+            if os.path.exists(file):
+                logging.info(f'Opening {file}')
+                ids = self._id_for_index(list(self.selection))
+                pattern = '|'.join(f'SAMPLE = {id}' for id in ids)
+                less = f'less -p "{pattern}" "{file}"'
+                os.system('tmux split-window -h {less}')
+                os.system('tmux select-layout main-vertical')
+            else:
+                logging.error(f'Could not find {file}')
         else:
             if self.tags[self.current_tag]['type'] is int \
                     and cn in self._byte_numbers:
@@ -569,6 +595,17 @@ class App:
     def cache(self, cache):
         self._view_state = cache.get('_view_state')
 
+    @property
+    def data(self):
+        return {
+            'tag definitions':self.tags,
+            'tags':self.tag_data
+        }
+
+    @data.setter
+    def data(self, data):
+        self.tag_data = data.get('tags')
+
     def get_current_values(self, tag):
         selection = list(self.selection)
         ids = self._id_for_index(selection)
@@ -621,13 +658,14 @@ class App:
         self.last_saver_pid = os.fork()
         if self.last_saver_pid == 0:
             if last_pid is not None:
+                save = self.data
                 try:
                     os.waitpid(last_pid, 0)
                 except ChildProcessError:
                     pass
             try:
                 with open(self.output, 'w') as f:
-                    f.write(yaml.dump(self.tag_data))
+                    f.write(yaml.dump(save))
             except:
                 os._exit(1)
             os._exit(0)
@@ -752,7 +790,7 @@ class App:
                 self._dialog_changed = True
         elif cn == b'd':
             col = self.ordered_columns[self.col_pointer]
-            if col == 'id':
+            if col in self._required_columns:
                 logging.debug(f'Cannot deactivate "{col}".')
             elif col in self.show_columns:
                 logging.info(f'Deactivate "{col}".')
