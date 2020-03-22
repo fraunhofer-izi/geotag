@@ -152,8 +152,9 @@ class App:
         self._measured_col_width = dict()
         for col in self.raw_df.columns:
             l = self.raw_df[col].astype(str).map(len).quantile(.99)
-            self._measured_col_width[col] = int(min(20, max(l, len(col))))
+            self._measured_col_width[col] = int(max(l, len(col)))
         self.sort_columns = set()
+        self.column_seperator = ' '
         self.filter = dict()
         self.toggl_help(False)
         self.in_dialog = False
@@ -258,37 +259,6 @@ class App:
                     enumerate(sorted(set(r[self.color_by])-{None}))}
             self.colmap = cmap.get
 
-    @property
-    def formatters(self):
-        cws = dict(self.col_widths())
-        formatters = list()
-        def int_formatter(s, width):
-            if s=='-':
-                return ' '*(width-1)+'-'
-            text = f'%{width}d' % s
-            if len(text)>width:
-                return text[:(width-3)]+'...'
-            return text
-        def str_formatter(s, width):
-            text = str(s).splitlines()[0]
-            if len(text)>width:
-                return text[:(width-3)]+'...'
-            return text.rjust(width)
-        for col in self.df.columns:
-            width = int(cws[col])
-            logging.debug(f'{col} with {width}')
-            tag_dtype = self.tags.get(col, dict()).get('type')
-            if tag_dtype is int:
-                formatters.append(lambda s: int_formatter(s, width))
-            else:
-                formatters.append(lambda s: str_formatter(s, width))
-        return formatters
-
-    def get_lines(self, lines):
-        rdf = self.df.iloc[lines, :]
-        return rdf.to_string(index=False, header=False,
-                             formatters=self.formatters).splitlines()
-
     def _init_curses(self):
         curses.use_default_colors()
         curses.init_pair(99, -1, -1)
@@ -300,12 +270,33 @@ class App:
         for i, col in enumerate(tcolors):
             curses.init_pair(i+1, col, -1)
 
+    def _format(self, val, col, width):
+        if val=='-':
+            return ' '*(width-1)+'-'
+        tag_dtype = self.tags.get(col, dict()).get('type')
+        if tag_dtype is int:
+            text = f'%{width}d' % val
+        else:
+            text = str(val).splitlines()[0]
+        if len(text)>width:
+            return text[:(width-3)]+'...'
+        return text.rjust(width)
+
+    def _str_from_line(self, line=None):
+        """ Returns string for line list and  header line if line==None. """
+        if line is None:
+            return self.column_seperator.join(
+                self._format(col, None, w) for col, w in self.col_widths()
+            )
+        return self.column_seperator.join(
+            self._format(l, col, w) for l, (col, w) in
+                zip(line, self.col_widths())
+        )
+
     def update_content(self):
         self.update_df()
         one_line = self.df.iloc[:1, :]
-        lines = one_line.to_string(index=False, header=True,
-                                   formatters=self.formatters).splitlines()
-        self.header = ''.join(col.rjust(w) for col, w in self.col_widths())
+        self.header = self._str_from_line()
         self.total_lines = self.df.shape[0]
         self.lines = list(range(self.total_lines))
         self.stale_lines = set(range(self.total_lines))
@@ -315,12 +306,12 @@ class App:
 
     def update_lines(self, line_numbers):
         locs = set(line_numbers).intersection(self.stale_lines)
-        if locs:
-            ordered_locs = list(locs)
-            new_lines = self.get_lines(ordered_locs)
-            for i, j in enumerate(ordered_locs):
-                self.lines[j] = new_lines[i]
-            self.stale_lines -= locs
+        if not locs:
+            return
+        ordered_locs = list(locs)
+        for j in ordered_locs:
+            self.lines[j] = self._str_from_line(self.df.iloc[j, :])
+        self.stale_lines -= locs
 
     def run(self, stdscr):
         self._init_curses()
