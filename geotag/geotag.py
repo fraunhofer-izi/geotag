@@ -26,7 +26,7 @@ def main():
                         #'tumor-deconvolution-dream-challenge/'
                         #'extraction_stats_head.tsv')
                         default="/home/dominik/rn_home/dominik.otto/Projects/"
-                        "geotag/data/extraction_stats_head.tsv")
+                        "geotag/data/extraction_stats.tsv")
     parser.add_argument('--array',
                         help='.RDS table containing the extraction status of '
                         'microarray studies.', type=str, metavar='path',
@@ -151,8 +151,8 @@ class App:
         self.raw_df.index = uniquify(self.raw_df['id'])
         self._measured_col_width = dict()
         for col in self.raw_df.columns:
-            l = self.raw_df[col].astype(str).map(len).max()
-            self._measured_col_width[col] = l
+            l = self.raw_df[col].astype(str).map(len).quantile(.99)
+            self._measured_col_width[col] = int(min(20, max(l, len(col))))
         self.sort_columns = set()
         self.filter = dict()
         self.toggl_help(False)
@@ -187,13 +187,13 @@ class App:
             self.tag_data.setdefault(tag, dict())
         self.reset_cols()
         self._update_now = True
-        self.stale_lines = None
 
     def col_widths(self):
-        for col, width in self._measured_col_width.items():
-            yield col, width
-        for tag, info in self.tags.items():
-            yield tag, info['col_width']
+        for col in self.df.columns:
+            if col in self._measured_col_width:
+                yield col, self._measured_col_width[col]
+            elif col in self.tags:
+                yield col, self.tags[col]['col_width']
 
     def reset_cols(self):
         self.ordered_columns = ['id']
@@ -260,45 +260,33 @@ class App:
 
     @property
     def formatters(self):
-        formatters = dict()
-        for col, width in self.col_widths():
-            if col not in self.df:
-                continue
+        cws = dict(self.col_widths())
+        formatters = list()
+        def int_formatter(s, width):
+            if s=='-':
+                return ' '*(width-1)+'-'
+            text = f'%{width}d' % s
+            if len(text)>width:
+                return text[:(width-3)]+'...'
+            return text
+        def str_formatter(s, width):
+            text = str(s).splitlines()[0]
+            if len(text)>width:
+                return text[:(width-3)]+'...'
+            return text.rjust(width)
+        for col in self.df.columns:
+            width = int(cws[col])
+            logging.debug(f'{col} with {width}')
             tag_dtype = self.tags.get(col, dict()).get('type')
             if tag_dtype is int:
-                def formatter(s):
-                    if s=='-':
-                        return ' '*(width-1)+'-'
-                    text = f'%{width}d' % s
-                    if len(text)>width:
-                        return text[:(width-3)]+'...'
-                    return text
-            elif tag_dtype:
-                def formatter(s):
-                    text = str(s).strip().splitlines()[0]
-                    if len(text)>width:
-                        return text[:(width-3)]+'...'
-                    return text.rjust(width)
+                formatters.append(lambda s: int_formatter(s, width))
             else:
-                def formatter(s):
-                    text = str(s).strip().splitlines()[0]
-                    if len(text)>width:
-                        return text[:(width-3)]+'...'
-                    return text.rjust(width)
-            formatters[col] = formatter
+                formatters.append(lambda s: str_formatter(s, width))
         return formatters
 
-    def header_body(self):
-        self.update_df()
-        lines = self.df.to_string(index=False, max_colwidth=80,
-                                  formatters=self.formatters).splitlines()
-        header = lines[0]
-        lines = lines[1:]
-        return header, lines
-
-    def these_lines(self, lines):
+    def get_lines(self, lines):
         rdf = self.df.iloc[lines, :]
-        return rdf.to_string(index=False, max_colwidth=80, header=False,
+        return rdf.to_string(index=False, header=False,
                              formatters=self.formatters).splitlines()
 
     def _init_curses(self):
@@ -312,18 +300,27 @@ class App:
         for i, col in enumerate(tcolors):
             curses.init_pair(i+1, col, -1)
 
-    def _update_content(self, line_numbers=None):
-        if not line_numbers:
-            self.header, self.lines = self.header_body()
-            self.total_lines = len(self.lines)
-            if self.pointer > self.total_lines:
-                self.pointer = 0
-                self.selection = {self.pointer}
-        else:
-            locs = list(line_numbers)
-            new_lines = self.these_lines(locs)
-            for i, j in enumerate(locs):
+    def update_content(self):
+        self.update_df()
+        one_line = self.df.iloc[:1, :]
+        lines = one_line.to_string(index=False, header=True,
+                                   formatters=self.formatters).splitlines()
+        self.header = ''.join(col.rjust(w) for col, w in self.col_widths())
+        self.total_lines = self.df.shape[0]
+        self.lines = list(range(self.total_lines))
+        self.stale_lines = set(range(self.total_lines))
+        if self.pointer > self.total_lines:
+            self.pointer = 0
+            self.selection = {self.pointer}
+
+    def update_lines(self, line_numbers):
+        locs = set(line_numbers).intersection(self.stale_lines)
+        if locs:
+            ordered_locs = list(locs)
+            new_lines = self.get_lines(ordered_locs)
+            for i, j in enumerate(ordered_locs):
                 self.lines[j] = new_lines[i]
+            self.stale_lines -= locs
 
     def run(self, stdscr):
         self._init_curses()
@@ -333,8 +330,7 @@ class App:
         stdscr.refresh()
         while True:
             if self._update_now:
-                self._update_content(self.stale_lines)
-                self.stale_lines = None
+                self.update_content()
                 self._update_now = False
             curses.update_lines_cols()
             padding = ' '*curses.COLS
@@ -345,6 +341,8 @@ class App:
             tabcols = curses.COLS
             cols = slice(self.lrpos, self.lrpos+tabcols)
             button = self.top + nlines
+            viewed_lines = range(self.top, button+1)
+            self.update_lines(viewed_lines)
             self._print_body(self.header, self.lines, nlines, cols)
             stdscr.addstr(nlines+2, 0, '')
             stdscr.addstr(' help: ', curses.color_pair(100))
@@ -546,7 +544,6 @@ class App:
         for critical in ['filter', 'sort_columns', 'color_by']:
             if new_state[critical] is not getattr(self, critical):
                 self._update_now = True
-                self.stale_lines = None
         for key, value in new_state.items():
             setattr(self, key, value)
 
@@ -583,19 +580,18 @@ class App:
             td[id] = val
             self.df.loc[self.df.index[index], tag] = val
         self.save_tag_data()
-        self.stale_lines = self.selection
-        self._update_now = True
+        self.stale_lines.update(self.selection)
         yield short_desc
         logging.info('undoing '+long_desc)
         for ind, (id, v) in enumerate(current.items()):
             if v is None or np.isnan(v):
                 del td[id]
+                self.df.loc[self.df.index[lselected[ind]], tag] = '-'
             else:
                 td[id] = v
-            self.df.loc[self.df.index[lselected[ind]], tag] = v
+                self.df.loc[self.df.index[lselected[ind]], tag] = v
         self.save_tag_data()
-        self.stale_lines = view_state['selection']
-        self._update_now = True
+        self.stale_lines.update(view_state['selection'])
         self._view_state = view_state
 
     def save_tag_data(self):
