@@ -57,13 +57,13 @@ def main():
     parser.add_argument('--softPath',
                         help='Path to the soft file directory.',
                         type=str, metavar='path.yml',
-                        default="/mnt/ribolution/user_worktmp/dominik.otto/"
-                        "tumor-deconvolution-dream-challenge/soft-files")
+                        default="/home/dominik/rn_home/dominik.otto/Projects/"
+                        f"geotag/data/{os.environ['USER']}.yml")
     parser.add_argument('--state',
                         help='Path to a cached state of geotag.',
                         type=str, metavar='path.pkl',
-                        default="/home/dominik/rn_home/dominik.otto/Projects/"
-                        f"geotag/data/{os.environ['USER']}.pkl")
+                        default="/mnt/ribolution/user_worktmp/dominik.otto/"
+                        "tumor-deconvolution-dream-challenge/soft-files")
     parser.add_argument('--update',
                         help='Overwrite the cache.',
                         action="store_true")
@@ -153,26 +153,30 @@ class App:
         self.last_saver_pid = None
         self.color_by = 'quality'
         self.current_tag = 'quality'
-        if not os.path.exists(tags):
-            logging.warning(f'The tags file "{tags}" dose not exist. '
-                           'Using default tags...')
-            self.tags = default_tags
-        else:
+        self.tags = None
+        try:
             with open(self.tags_file, 'rb') as f:
                 self.tags = yaml.load(f, Loader=yaml.FullLoader)
+        except IOError:
+            pass
+        if not self.tags:
+            logging.warning(f'The tags file "{tags}" could not be read. '
+                           'Using default tags...')
+            self.tags = default_tags
+        self.tag_data = None
         if not os.path.exists(self.output):
             logging.warning(f'The output file "{self.output}" dose not exist '
                             'yet. Starting over...')
             self.tag_data = dict()
         else:
             with open(self.output, 'rb') as f:
-                self.data = yaml.load(f, Loader=yaml.FullLoader)
-            if not isinstance(self.tag_data, dict):
+                data = yaml.load(f, Loader=yaml.FullLoader)
+            if not isinstance(data, dict):
                 logging.warning(f'The loaded {self.output} is no dict '
                                 'and will be resetted.')
-                self.tag_data = dict()
-        for tag in self.tags:
-            self.tag_data.setdefault(tag, dict())
+                self.data = dict()
+            else:
+                self.data = data
         self.reset_cols()
         self._update_now = True
 
@@ -604,7 +608,9 @@ class App:
 
     @data.setter
     def data(self, data):
-        self.tag_data = data.get('tags')
+        self.tag_data = data.get('tags', dict())
+        for tag in self.tags:
+            self.tag_data.setdefault(tag, dict())
 
     def get_current_values(self, tag):
         selection = list(self.selection)
