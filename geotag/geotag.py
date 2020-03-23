@@ -132,6 +132,7 @@ class App:
         self.output = output
         self.softPath = softPath
         self.tags_file = tags
+        self.error = None
         print('Loading data ...')
         rnaSeq_df = pd.read_csv(self.rnaSeq, sep="\t", low_memory=False)
         array_df = pd.read_csv(self.array, sep="\t", low_memory=False)
@@ -355,6 +356,10 @@ class App:
             if stack().canredo():
                 stdscr.addstr(' redoable: ', curses.color_pair(100))
                 stdscr.addstr(stack().redotext())
+            if self.error:
+                stdscr.addstr(' error: ', curses.color_pair(102))
+                stdscr.addstr(self.error)
+                self.error = None
             y, x = stdscr.getyx()
             stdscr.addstr(' '*(curses.COLS-x-1))
             if y < curses.LINES-1:
@@ -533,6 +538,7 @@ class App:
                 os.system('tmux select-layout main-vertical')
             else:
                 logging.error(f'Could not find {file}')
+                self.error = f'Could not find soft file for {gse}.'
         else:
             if self.tags[self.current_tag]['type'] == 'int' \
                     and cn in self._byte_numbers:
