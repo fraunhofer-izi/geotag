@@ -127,6 +127,7 @@ class App:
                  **kwargs):
         logging.basicConfig(filename=log, filemode='a', level=logging.DEBUG,
                 format='[%(asctime)s] %(levelname)s: %(message)s')
+        self.log = log
         self.array = array
         self.rnaSeq = rnaSeq
         self.output = output
@@ -159,17 +160,8 @@ class App:
         self.color_by = 'quality'
         self.current_tag = 'quality'
         self.sort_reverse_columns.add('n_sample')
-        self.tags = None
-        try:
-            with open(self.tags_file, 'rb') as f:
-                self.tags = yaml.load(f, Loader=yaml.SafeLoader)
-        except IOError:
-            pass
-        if not self.tags:
-            logging.warning(f'The tags file "{tags}" could not be read. '
-                           'Using default tags...')
-            self.tags = default_tags
-        self.tag_data = None
+        self.tags = dict()
+        self.tag_data = dict()
         if not os.path.exists(self.output):
             logging.warning(f'The output file "{self.output}" dose not exist '
                             'yet. Starting over...')
@@ -183,8 +175,22 @@ class App:
                 self.data = dict()
             else:
                 self.data = data
+        self.load_tag_definitions()
         self.reset_cols()
         self._update_now = True
+
+    def load_tag_definitions(self):
+        try:
+            with open(self.tags_file, 'rb') as f:
+                self.tags = yaml.load(f, Loader=yaml.SafeLoader)
+        except IOError:
+            pass
+        if not self.tags:
+            logging.warning(f'The tags file "{self.tags}" could not be read. '
+                           'Using default tags...')
+            self.tags = default_tags
+        for tag in self.tags:
+            self.tag_data.setdefault(tag, dict())
 
     def col_widths(self):
         for col in self.df.columns:
@@ -355,7 +361,7 @@ class App:
             if stack().canredo():
                 status_bar.append(('redoable', stack().redotext(), 100))
             if self.error:
-                status_bar.append(('error', self.error, 102))
+                status_bar = [('error', self.error, 102)] + status_bar
                 self.error = None
             for name, content, color in status_bar:
                 y, x = stdscr.getyx()
@@ -597,6 +603,7 @@ class App:
         'col_pointer',
         'top',
         'filter',
+        'show_columns',
         'sort_columns',
         'sort_reverse_columns',
         'ordered_columns',
@@ -685,19 +692,23 @@ class App:
         self._view_state = view_state
 
     def save_tag_data(self):
-        last_pid = self.last_saver_pid
+        if self.last_saver_pid:
+            try:
+                _, exit_code = os.waitpid(self.last_saver_pid, 0)
+            except ChildProcessError:
+                pass
+            if exit_code != 0:
+                self.error = f'Could not save!! log: {self.log}'
         self.last_saver_pid = os.fork()
         if self.last_saver_pid == 0:
-            if last_pid is not None:
-                save = self.data
-                try:
-                    os.waitpid(last_pid, 0)
-                except ChildProcessError:
-                    pass
+            save = self.data
             try:
-                with open(self.output, 'w') as f:
+                with open(self.output+'.tmp', 'w') as f:
                     f.write(yaml.dump(save))
-            except:
+                os.rename(self.output+'.tmp', self.output)
+            except BaseException as e:
+                logging.error('Error writing tag data.')
+                logging.error(e)
                 os._exit(1)
             os._exit(0)
 
@@ -790,6 +801,9 @@ class App:
     def _dialog(self, cn):
         if cn == b'f':
             self.in_dialog = False
+            self.stdscr.addstr(0, 0,
+                               'Loading ...'.ljust(curses.COLS)[:curses.COLS-1])
+            self.stdscr.refresh()
             if self._dialog_changed:
                 self._update_now = True
         elif cn == b'\n':
