@@ -88,6 +88,7 @@ def main():
             pickle.dump(app.cache, f)
 
 tcolors = [196, 203, 202, 208, 178, 148, 106, 71, 31, 26]
+tag_characteristics = ['key', 'type', 'col_width', 'desc']
 default_tags = {
     'quality':{
         'type':'int',
@@ -123,11 +124,12 @@ def keypartmap(c):
 class App:
     __version__ = '0.0.1'
 
-    def __init__(self, rnaSeq, array, log, tags, output, softPath=None,
+    def __init__(self, rnaSeq, array, log, tags, output, user, softPath,
                  **kwargs):
         logging.basicConfig(filename=log, filemode='a', level=logging.DEBUG,
                 format='[%(asctime)s] %(levelname)s: %(message)s')
         self.log = log
+        self.user = user
         self.array = array
         self.rnaSeq = rnaSeq
         self.output = output
@@ -151,8 +153,11 @@ class App:
         self.filter = dict()
         self.toggl_help(False)
         self.in_dialog = False
+        self.in_tag_dialog = False
         self.pointer = 0
         self.col_pointer = 0
+        self.tag_pointer = 0
+        self.add_tag = False
         self.selection = {self.pointer}
         self.lrpos = 0
         self.top = 0
@@ -191,6 +196,12 @@ class App:
             self.tags = default_tags
         for tag in self.tags:
             self.tag_data.setdefault(tag, dict())
+
+    def save_tag_definitions(self):
+        temp_out = self.tags_file+'.'+self.user
+        with open(temp_out, 'w') as f:
+            f.write(yaml.dump(self.tags))
+        os.rename(temp_out, self.tags_file)
 
     def col_widths(self):
         for col in self.df.columns:
@@ -381,11 +392,15 @@ class App:
                 self._print_help()
             if self.in_dialog:
                 self._view_dialoge()
+            elif self.in_tag_dialog:
+                self._view_tag_dialoge()
             cn = self.get_key(stdscr)
             if cn == b'q':
                 break
             if self.in_dialog:
                 self._dialog(cn)
+            elif self.in_tag_dialog:
+                self._tag_dialog(cn)
             else:
                 self._react(cn, nlines, tabcols)
 
@@ -449,6 +464,9 @@ class App:
         elif cn == b'f':
             self._dialog_changed = False
             self.in_dialog = True
+        elif cn == b't':
+            self._dialog_changed = False
+            self.in_tag_dialog = True
         elif cn == b'KEY_UP':
             self.pointer -= 1
             self.pointer %= self.total_lines
@@ -601,6 +619,7 @@ class App:
         'selection',
         'pointer',
         'col_pointer',
+        'tag_pointer',
         'top',
         'filter',
         'show_columns',
@@ -769,19 +788,19 @@ class App:
             self.win.addstr('  ')
             self.win.addstr(lable, curses.color_pair(col))
         self.indentation = max(len(c) for c in self.ordered_columns)
-        #self.win.addstr(2, 1, f'self.woffset: {self.woffset} hight:{hight}')
-        self.win.addstr(4, self.table_x0,
-                        'column' + ' '*(self.indentation-5) + 'regex')
+        ind = width-self.table_x0-1 if width-1>self.table_x0 else 0
+        header = 'column' + ' '*(self.indentation-5) + 'regex'
+        self.win.addstr(4, self.table_x0, header[:ind])
         self.woffset = max(0, self.col_pointer-hight+self.table_y0+3)
         for i, col in enumerate(self.ordered_columns):
             if i < self.woffset:
                 continue
             elif self.woffset > 0 and i == self.woffset:
-                self.win.addstr(self.table_y0, self.table_x0, '...'[:width-6])
+                self.win.addstr(self.table_y0, self.table_x0, '...'[:ind])
                 continue
             ypos = i+self.table_y0-self.woffset
             if ypos+2 == hight:
-                self.win.addstr(ypos, self.table_x0, '...'[:width-6])
+                self.win.addstr(ypos, self.table_x0, '...'[:ind])
                 break
             attr = curses.A_REVERSE if i==self.col_pointer else curses.A_NORMAL
             if col not in self.show_columns:
@@ -794,7 +813,7 @@ class App:
                 attr |= curses.color_pair(legend['reverse sorted by'])
             filter = self.filter.get(col, '*')
             text = col + ' '*(self.indentation-len(col)+1) + filter
-            self.win.addstr(ypos, self.table_x0, text[:width-6], attr)
+            self.win.addstr(ypos, self.table_x0, text[:ind], attr)
             if col in self.tag_data:
                 self.win.addstr(ypos, 2, 'tag')
 
@@ -898,10 +917,155 @@ class App:
                 self.color_by = col
             self._dialog_changed = True
 
+    def _view_tag_dialoge(self):
+        self.table_y0 = 4
+        self.table_x0 = 2
+        hight = min(len(self.ordered_columns)+self.table_y0+2, curses.LINES-4)
+        width = min(self._window_width, curses.COLS-4)
+        self.win = self.stdscr.subwin(hight, width, 2, 2)
+        self.win.clear()
+        self.win.border()
+        buttons = {
+            't':'exit',
+            'Enter':'edit tag',
+            'n':'new tag'
+        }
+        self.win.move(1, self.table_x0-1)
+        for key, desc in buttons.items():
+            hintlen = len(key)+len(desc)+4
+            _, x = self.win.getyx()
+            if x+hintlen > width-2:
+                break
+            self.win.addstr(' ')
+            self.win.addstr(key+':', curses.color_pair(100))
+            self.win.addstr(' '+desc)
+        self.win.move(2, self.table_x0-2)
+        self.indentation = {'name': max(len(c) for c in self.tags)}
+        header = 'name'.ljust(self.indentation['name'])
+        for tc in tag_characteristics:
+            field_len = max(len(str(v[tc])) for v in self.tags.values())
+            field_len = max(len(tc), field_len)
+            header += ' '+tc.ljust(field_len)
+            self.indentation[tc] = field_len
+        ind = width-self.table_x0-1 if width-1>self.table_x0 else 0
+        self.win.addstr(3, self.table_x0, header[:ind])
+        self.woffset = max(0, self.tag_pointer-hight+self.table_y0+3)
+        for i, tag in enumerate(sorted(self.tags)):
+            if i < self.woffset:
+                continue
+            elif self.woffset > 0 and i == self.woffset:
+                self.win.addstr(self.table_y0, self.table_x0, '...'[:ind])
+                continue
+            ypos = i+self.table_y0-self.woffset
+            if ypos+2 == hight:
+                self.win.addstr(ypos, self.table_x0, '...'[:ind])
+                break
+            attr = curses.A_REVERSE if i==self.tag_pointer else curses.A_NORMAL
+            text = tag.ljust(self.indentation['name'])
+            for tc in tag_characteristics:
+                content = str(self.tags[tag].get(tc, ''))
+                indent = self.indentation[tc]
+                text += ' '+content.ljust(indent)
+            self.win.addstr(ypos, self.table_x0, text[:ind], attr)
+        if self.add_tag:
+            self._tag_edit()
+            self.add_tag = False
+
+    def _tag_dialog(self, cn):
+        if cn == b't':
+            self.in_tag_dialog = False
+            self.stdscr.addstr(0, 0,
+                               'Loading ...'.ljust(curses.COLS)[:curses.COLS-1])
+            self.stdscr.refresh()
+            if self._dialog_changed:
+                self._update_now = True
+        elif cn == b'\n':
+            for i, tag in enumerate(sorted(self.tags)):
+                if i==self.tag_pointer:
+                    break
+            self._tag_edit(tag)
+            self._dialog_changed = True
+        elif cn == b'n':
+            self.tag_pointer = len(self.tags)
+            self.add_tag = True
+        elif cn == b'KEY_UP':
+            self.tag_pointer -= 1
+            self.tag_pointer %= len(self.tags)
+        elif cn == b'KEY_DOWN':
+            self.tag_pointer += 1
+            self.tag_pointer %= len(self.tags)
+
+    def _tag_edit(self, tag_name=None):
+        info = self.tags.get(tag_name, dict())
+        if tag_name is None:
+            tag_name = ''
+        ypos = self.tag_pointer + self.table_y0 - self.woffset + 2
+        xpos = self.table_x0+2
+        total_width = min(self._window_width, curses.COLS-4)
+        ind = total_width - xpos if total_width>xpos else 0
+        def print_status(status, color=101):
+            self.stdscr.addstr(4, self.table_x0+2, status.ljust(ind)[:ind],
+                               curses.color_pair(color))
+            self.stdscr.refresh()
+        def get_value(default):
+            width = total_width - xpos
+            self.stdscr.addstr(ypos, xpos, ' '*width)
+            editwin = self.stdscr.subwin(1, width, ypos, xpos)
+            editwin.addstr(0, 0, default)
+            self.stdscr.refresh()
+            box = Textbox(editwin)
+            box.edit()
+            return box.gather().strip()
+        print_status('Enter a name!')
+        new_name = get_value(tag_name)
+        xpos += self.indentation['name']+1
+        new_info = dict()
+        print_status('Press a letter key!')
+        used_keyes = {t['key'] for t in self.tags.values()}
+        while True:
+            self.stdscr.addstr(ypos, xpos, info.get('key', ''))
+            self.stdscr.refresh()
+            key = self.stdscr.getkey(ypos, xpos)
+            if key in used_keyes:
+                print_status('Press an unused letter key!', 102)
+            elif key in 'abcdefghijklmnopqrstuvwxyz':
+                break
+            else:
+                print_status('Press a letter key!', 102)
+        new_info['key'] = key
+        self.stdscr.addstr(ypos, xpos, key)
+        xpos += self.indentation['key']+1
+        print_status('Enter a type!')
+        ct = info.get('type', '')
+        while True:
+            ct = get_value(ct)
+            if ct in ['int', 'str']:
+                break
+            print_status('Please enter "int" for integer or "str" for string!',
+                         102)
+        new_info['type'] = ct
+        xpos += self.indentation['type']+1
+        print_status('Enter a column width!')
+        cw = info.get('col_width', '')
+        while True:
+            cw = get_value(str(cw))
+            if cw.isnumeric() and int(cw)>0:
+                break
+            print_status('Please enter a positive integer!', 102)
+        new_info['col_width'] = int(cw)
+        xpos += self.indentation['col_width']+1
+        print_status('Enter a description!')
+        new_info['desc'] = get_value(info.get('desc', ''))
+        if tag_name in self.tags:
+            del self.tags[tag_name]
+        self.tags[new_name] = new_info
+        self.save_tag_definitions()
+
     _helptext = """
         h             Show/hide help window.
         q             Save and quit geotag.
         f             Filter dialoge.
+        t             Tag dialoge.
         Up            Move upward.
         Down          Move downward.
         Shift+Up      Select upward.
