@@ -139,7 +139,7 @@ class App:
         self.raw_df = pd.concat([rnaSeq_df, array_df])
         self.raw_df.index = uniquify(self.raw_df['id'])
         smap_counts = self.raw_df['gse'].value_counts()
-        self.raw_df['n'] = smap_counts[self.raw_df['gse']].values
+        self.raw_df['n_sample'] = smap_counts[self.raw_df['gse']].values
         self._measured_col_width = dict()
         for col in self.raw_df.columns:
             l = self.raw_df[col].astype(str).map(len).quantile(.99)
@@ -158,7 +158,7 @@ class App:
         self.last_saver_pid = None
         self.color_by = 'quality'
         self.current_tag = 'quality'
-        self.sort_reverse_columns.add('n')
+        self.sort_reverse_columns.add('n_sample')
         self.tags = None
         try:
             with open(self.tags_file, 'rb') as f:
@@ -198,7 +198,7 @@ class App:
         ordered_columns += list(self.tags.keys())
         ordered_columns += [
             'gse',
-            'n',
+            'n_sample',
             'technology',
             'status',
             'coarse.cell.type',
@@ -235,8 +235,6 @@ class App:
             sort_cols = self.sort_columns.union(self.sort_reverse_columns)
             sc = [c for c in self.ordered_columns if c in sort_cols]
             ascending = [True if c in self.sort_columns else False for c in sc]
-            logging.debug(f'{sc}')
-            logging.debug(f'{ascending}')
             r = r.sort_values(sc, ascending=ascending)
         cols = [c for c in self.ordered_columns if c in self.show_columns]
         r = r[cols]
@@ -244,7 +242,7 @@ class App:
             logging.debug('No entries match the filter.')
             r = pd.DataFrame({
                 'id':['none'],
-                'error':['No entries match the filter.']
+                'gse':['None']
             })
         self.df = r
         if self.color_by not in r.columns:
@@ -328,6 +326,9 @@ class App:
             curses.update_lines_cols()
             padding = ' '*curses.COLS
             nlines = curses.LINES-4
+            if self.pointer > self.total_lines-1:
+                logging.debug('Resetting pointer to 0.')
+                self.pointer = 0
             self.top = self.pointer if self.pointer < self.top else self.top
             self.top = self.pointer - nlines \
                     if self.pointer >= self.top + nlines else self.top
@@ -337,29 +338,34 @@ class App:
             viewed_lines = range(self.top, button+1)
             self.update_lines(viewed_lines)
             self._print_body(self.header, self.lines, nlines, cols)
-            stdscr.addstr(nlines+2, 0, '')
-            stdscr.addstr(' help: ', curses.color_pair(100))
-            stdscr.addstr('h')
-            stdscr.addstr(' tagging: ', curses.color_pair(100))
-            stdscr.addstr(self.current_tag)
-            stdscr.addstr(' selected: ', curses.color_pair(100))
+            curses.setsyx(nlines+2, 0)
             if len(self.selection) == 1:
-                stdscr.addstr(self._id_for_index(self.pointer))
+                sel_status = self._id_for_index(self.pointer)
             else:
-                stdscr.addstr(str(len(self.selection)))
+                sel_status = str(len(self.selection))
+            status_bar = [
+                ('help', 'h', 100),
+                ('tagging', self.current_tag, 100),
+                ('selected', sel_status, 100),
+            ]
             if cn:
-                stdscr.addstr(' key: ', curses.color_pair(100))
-                stdscr.addstr(str(cn))
+                status_bar.append(('key', str(cn), 100))
             if stack().canundo():
-                stdscr.addstr(' undoable: ', curses.color_pair(100))
-                stdscr.addstr(stack().undotext())
+                status_bar.append(('undoable', stack().undotext(), 100))
             if stack().canredo():
-                stdscr.addstr(' redoable: ', curses.color_pair(100))
-                stdscr.addstr(stack().redotext())
+                status_bar.append(('redoable', stack().redotext(), 100))
             if self.error:
-                stdscr.addstr(' error: ', curses.color_pair(102))
-                stdscr.addstr(self.error)
+                status_bar.append(('error', self.error, 102))
                 self.error = None
+            for name, content, color in status_bar:
+                y, x = stdscr.getyx()
+                name = f' {name}: '
+                space = curses.COLS-1-x
+                if y==curses.LINES-1 and len(name)+len(content)>space:
+                    stdscr.addstr(' ...'[:space])
+                    break
+                stdscr.addstr(name, curses.color_pair(color))
+                stdscr.addstr(content)
             y, x = stdscr.getyx()
             stdscr.addstr(' '*(curses.COLS-x-1))
             if y < curses.LINES-1:
@@ -786,7 +792,7 @@ class App:
             self.in_dialog = False
             if self._dialog_changed:
                 self._update_now = True
-        elif cn == b'KEY_ENTER' or cn == b'^J':
+        elif cn == b'\n':
             col = self.ordered_columns[self.col_pointer]
             ypos = self.col_pointer + self.table_y0 - self.woffset + 2
             xpos = self.indentation + self.table_x0 + 3
