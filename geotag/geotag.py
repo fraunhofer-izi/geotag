@@ -137,11 +137,14 @@ class App:
         array_df = pd.read_csv(self.array, sep="\t", low_memory=False)
         self.raw_df = pd.concat([rnaSeq_df, array_df])
         self.raw_df.index = uniquify(self.raw_df['id'])
+        smap_counts = self.raw_df['gse'].value_counts()
+        self.raw_df['n'] = smap_counts[self.raw_df['gse']].values
         self._measured_col_width = dict()
         for col in self.raw_df.columns:
             l = self.raw_df[col].astype(str).map(len).quantile(.99)
             self._measured_col_width[col] = int(max(l, len(col)))
         self.sort_columns = set()
+        self.sort_reverse_columns = set()
         self.column_seperator = ' '
         self.filter = dict()
         self.toggl_help(False)
@@ -154,6 +157,7 @@ class App:
         self.last_saver_pid = None
         self.color_by = 'quality'
         self.current_tag = 'quality'
+        self.sort_reverse_columns.add('n')
         self.tags = None
         try:
             with open(self.tags_file, 'rb') as f:
@@ -189,10 +193,11 @@ class App:
                 yield col, self.tags[col]['col_width']
 
     def reset_cols(self):
-        self.ordered_columns = ['id']
-        self.ordered_columns += list(self.tags.keys())
-        self.ordered_columns += [
+        ordered_columns = ['id']
+        ordered_columns += list(self.tags.keys())
+        ordered_columns += [
             'gse',
+            'n',
             'technology',
             'status',
             'coarse.cell.type',
@@ -201,14 +206,13 @@ class App:
             'col',
             'val'
         ]
-        all_columns = list(self.raw_df.columns) + list(self.tags.keys())
-        for col in self.ordered_columns:
-            if col not in all_columns:
-                self.ordered_columns.remove(col)
-        self.show_columns = set(self.ordered_columns)
-        for col in all_columns:
-            if col not in self.ordered_columns:
-                self.ordered_columns.append(col)
+        all_columns = set(self.raw_df.columns).union(set(self.tags.keys()))
+        ordered_columns = [c for c in ordered_columns if c in all_columns]
+        self.show_columns = set(ordered_columns)
+        for c in all_columns:
+            if c not in ordered_columns:
+                ordered_columns.append(c)
+        self.ordered_columns = ordered_columns
 
     def toggl_help(self, to: bool=None):
         if to is not None:
@@ -226,9 +230,13 @@ class App:
         r = pd.concat(data_frames, axis=1, join='outer').fillna('-')
         for col, filter in self.filter.items():
             r = r[r[col].astype(str).str.contains(filter)]
-        if self.sort_columns:
-            sc = [c for c in self.ordered_columns if c in self.sort_columns]
-            r = r.sort_values(sc)
+        if self.sort_columns or self.sort_reverse_columns:
+            sort_cols = self.sort_columns.union(self.sort_reverse_columns)
+            sc = [c for c in self.ordered_columns if c in sort_cols]
+            ascending = [True if c in self.sort_columns else False for c in sc]
+            logging.debug(f'{sc}')
+            logging.debug(f'{ascending}')
+            r = r.sort_values(sc, ascending=ascending)
         cols = [c for c in self.ordered_columns if c in self.show_columns]
         r = r[cols]
         if r.empty:
@@ -259,6 +267,7 @@ class App:
         curses.init_pair(102, curses.COLOR_RED, -1)
         curses.init_pair(103, curses.COLOR_WHITE, -1)
         curses.init_pair(104, curses.COLOR_YELLOW, -1)
+        curses.init_pair(105, curses.COLOR_CYAN, -1)
         for i, col in enumerate(tcolors):
             curses.init_pair(i+1, col, -1)
 
@@ -573,9 +582,11 @@ class App:
     view_attributes = {
         'selection',
         'pointer',
+        'col_pointer',
         'top',
         'filter',
         'sort_columns',
+        'sort_reverse_columns',
         'ordered_columns',
         'color_by'
     }
@@ -586,8 +597,9 @@ class App:
 
     @_view_state.setter
     def _view_state(self, new_state):
-        for critical in ['filter', 'sort_columns', 'color_by']:
-            if new_state[critical] is not getattr(self, critical):
+        for critical in ['filter', 'sort_columns', 'sort_reverse_columns',
+                         'color_by']:
+            if new_state.get(critical) is not getattr(self, critical):
                 self._update_now = True
         for key, value in new_state.items():
             setattr(self, key, value)
@@ -701,7 +713,7 @@ class App:
         self.win.clear()
         self.win.border()
         buttons = {
-            'e':'exit',
+            'f':'exit',
             'Enter':'edit regex',
             'r':'reset',
             'd':'toggle deactivate',
@@ -722,6 +734,7 @@ class App:
             'legend:':103,
             'deactivated':102,
             'sorted by':101,
+            'reverse sorted by':105,
             'color by':104
         }
         self.win.move(2, self.table_x0-2)
@@ -754,6 +767,8 @@ class App:
                 attr |= curses.color_pair(legend['color by'])
             elif col in self.sort_columns:
                 attr |= curses.color_pair(legend['sorted by'])
+            elif col in self.sort_reverse_columns:
+                attr |= curses.color_pair(legend['reverse sorted by'])
             filter = self.filter.get(col, '*')
             text = col + ' '*(self.indentation-len(col)+1) + filter
             self.win.addstr(ypos, self.table_x0, text[:width-6], attr)
@@ -761,7 +776,7 @@ class App:
                 self.win.addstr(ypos, 2, 'tag')
 
     def _dialog(self, cn):
-        if cn == b'e':
+        if cn == b'f':
             self.in_dialog = False
             if self._dialog_changed:
                 self._update_now = True
@@ -809,8 +824,12 @@ class App:
         elif cn == b's':
             col = self.ordered_columns[self.col_pointer]
             if col in self.sort_columns:
-                logging.info(f'Do not sort by "{col}".')
+                logging.info(f'Reverse sort by "{col}".')
                 self.sort_columns.remove(col)
+                self.sort_reverse_columns.add(col)
+            elif col in self.sort_reverse_columns:
+                logging.info(f'Do not sort by "{col}".')
+                self.sort_reverse_columns.remove(col)
             else:
                 logging.info(f'Sort by "{col}".')
                 self.sort_columns.add(col)
