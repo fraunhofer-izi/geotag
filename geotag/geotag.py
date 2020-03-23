@@ -62,8 +62,8 @@ def main():
     parser.add_argument('--state',
                         help='Path to a cached state of geotag.',
                         type=str, metavar='path.pkl',
-                        default="/mnt/ribolution/user_worktmp/dominik.otto/"
-                        "tumor-deconvolution-dream-challenge/soft-files")
+                        default="/home/dominik/rn_home/dominik.otto/Projects/"
+                        f"geotag/data/{os.environ['USER']}.pkl")
     parser.add_argument('--update',
                         help='Overwrite the cache.',
                         action="store_true")
