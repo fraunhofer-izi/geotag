@@ -10,6 +10,7 @@ import locale
 import logging
 import yaml
 from .undo import stack, undoable
+from pydoc import locate
 
 # use system default localization
 locale.setlocale(locale.LC_ALL, 'C')
@@ -89,15 +90,15 @@ def main():
 tcolors = [196, 203, 202, 208, 178, 148, 106, 71, 31, 26]
 default_tags = {
     'quality':{
-        'type':int,
+        'type':'int',
         'desc':'From 0 to 9.',
-        'key':b'\x1bq',
+        'key':'q',
         'col_width':8
     },
     'note':{
-        'type':str,
+        'type':'str',
         'desc':'A note.',
-        'key':b'\x1bn',
+        'key':'n',
         'col_width':20
     }
 }
@@ -156,7 +157,7 @@ class App:
         self.tags = None
         try:
             with open(self.tags_file, 'rb') as f:
-                self.tags = yaml.load(f, Loader=yaml.FullLoader)
+                self.tags = yaml.load(f, Loader=yaml.SafeLoader)
         except IOError:
             pass
         if not self.tags:
@@ -170,7 +171,7 @@ class App:
             self.tag_data = dict()
         else:
             with open(self.output, 'rb') as f:
-                data = yaml.load(f, Loader=yaml.FullLoader)
+                data = yaml.load(f, Loader=yaml.SafeLoader)
             if not isinstance(data, dict):
                 logging.warning(f'The loaded {self.output} is no dict '
                                 'and will be resetted.')
@@ -220,7 +221,7 @@ class App:
         data_frames = [self.raw_df.copy()]
         for col, tags in self.tag_data.items():
             tagd = pd.DataFrame.from_dict(tags, orient='index', columns=[col],
-                                          dtype=self.tags[col]['type'])
+                                          dtype=locate(self.tags[col]['type']))
             data_frames.append(tagd)
         r = pd.concat(data_frames, axis=1, join='outer').fillna('-')
         for col, filter in self.filter.items():
@@ -241,8 +242,8 @@ class App:
             self.coloring_now = False
             return
         self.coloring_now = self.color_by
-        is_numeric_tag = self.tags.get(self.color_by, dict()).get('type') is int
-        if is_numeric_tag or \
+        tag_type = self.tags.get(self.color_by, dict()).get('type', '')
+        if tag_type == 'int' or \
                 pd.api.types.is_numeric_dtype(r[self.color_by].dtype):
             self.colmap = lambda x: 99 if x=='-' else int(x%10)+1
         else:
@@ -264,8 +265,8 @@ class App:
     def _format(self, val, col, width):
         if val=='-':
             return ' '*(width-1)+'-'
-        tag_dtype = self.tags.get(col, dict()).get('type')
-        if tag_dtype is int:
+        tag_dtype = self.tags.get(col, dict()).get('type', '')
+        if tag_dtype == 'int':
             text = f'%{width}d' % val
         else:
             text = str(val).splitlines()[0]
@@ -524,17 +525,17 @@ class App:
             else:
                 logging.error(f'Could not find {file}')
         else:
-            if self.tags[self.current_tag]['type'] is int \
+            if self.tags[self.current_tag]['type'] == 'int' \
                     and cn in self._byte_numbers:
                 # set current tag to value
                 self.set_tag(self.current_tag, int(cn), self._view_state)
                 return
             for tag, info in self.tags.items():
-                if cn == info['key']:
-                    if info['type'] is int:
+                if cn == b'\x1b' + info['key'].encode():
+                    if info['type'] == 'int':
                         logging.info(f'Starting to tag {tag}.')
                         self.current_tag = tag
-                    elif info['type'] is str:
+                    elif info['type'] == 'str':
                         logging.info(f'Starting make a {tag}.')
                         self.make_str(tag)
 
@@ -625,7 +626,7 @@ class App:
         ids = self._id_for_index(lselected)
         td = self.tag_data[tag]
         current =  {id:td.get(id) for id in ids}
-        if self.tags[tag]['type'] is str:
+        if self.tags[tag]['type'] == 'str':
             log_val = val.splitlines()[0]
             if len(log_val) > 20:
                 log_val = log_val[:17]+'...'
@@ -878,9 +879,9 @@ class App:
         h = self._helptext[:]
         indent = 14
         for tag, info in self.tags.items():
-            keys = '+'.join(keypartmap(c) for c in info['key'])
+            keys = 'Alt+' + info['key']
             space = ' '*max(1, indent-len(keys))
-            if info['type'] is str:
+            if info['type'] == 'str':
                 h.append(keys+space+'Make a '+tag+'.')
             else:
                 h.append(keys+space+'Start tagging '+tag+'.')
