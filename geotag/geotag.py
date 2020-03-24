@@ -483,7 +483,7 @@ class App:
             self.selection = set(range(self.total_lines))
         elif cn == b'h':
             self.toggl_help()
-        elif cn == b'f':
+        elif cn == b'v':
             self._dialog_changed = False
             self.in_dialog = True
         elif cn == b't':
@@ -803,7 +803,7 @@ class App:
         self.win.clear()
         self.win.border()
         buttons = {
-            'f':'exit',
+            'v':'exit',
             'Enter':'edit regex',
             'r':'reset',
             'd':'toggle deactivate',
@@ -866,7 +866,7 @@ class App:
                 self.win.addstr(ypos, 2, 'tag')
 
     def _dialog(self, cn):
-        if cn == b'f':
+        if cn == b'v':
             self.in_dialog = False
             self.stdscr.addstr(0, 0,
                                'Loading ...'.ljust(curses.COLS)[:curses.COLS-1])
@@ -1278,7 +1278,7 @@ class App:
     _helptext = """
         h             Show/hide help window.
         q             Save and quit geotag.
-        f             Filter dialog.
+        v             View-dialog.
         t             Tag dialog.
         Up            Move upward.
         Down          Move downward.
