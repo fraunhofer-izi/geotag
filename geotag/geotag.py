@@ -56,8 +56,8 @@ def main():
     parser.add_argument('--softPath',
                         help='Path to the soft file directory.',
                         type=str, metavar='path.yml',
-                        default="/home/dominik/rn_home/dominik.otto/Projects/"
-                        f"geotag/data/{os.environ['USER']}.yml")
+                        default="/mnt/ribolution/user_worktmp/dominik.otto/"
+                        "tumor-deconvolution-dream-challenge/studies-soft/")
     parser.add_argument('--state',
                         help='Path to a cached state of geotag.',
                         type=str, metavar='path.pkl',
