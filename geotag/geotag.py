@@ -157,6 +157,8 @@ class App:
         self.pointer = 0
         self.col_pointer = 0
         self.tag_pointer = 0
+        self.tag_error = None
+        self.serious = False
         self.add_tag = False
         self.selection = {self.pointer}
         self.lrpos = 0
@@ -187,7 +189,7 @@ class App:
     def load_tag_definitions(self):
         try:
             with open(self.tags_file, 'rb') as f:
-                self.tags = yaml.load(f, Loader=yaml.SafeLoader)
+                self.tags.update(yaml.load(f, Loader=yaml.SafeLoader))
         except IOError:
             pass
         if not self.tags:
@@ -326,6 +328,7 @@ class App:
         if not locs:
             return
         ordered_locs = list(locs)
+        logging.debug(self.df.columns)
         for j in ordered_locs:
             self.lines[j] = self._str_from_line(self.df.iloc[j, :])
         self.stale_lines -= locs
@@ -394,7 +397,11 @@ class App:
                 self._view_dialoge()
             elif self.in_tag_dialog:
                 self._view_tag_dialoge()
-            cn = self.get_key(stdscr)
+            if not self.add_tag:
+                cn = self.get_key(stdscr)
+            else:
+                cn = b''
+                self.add_tag = False
             if cn == b'q':
                 break
             if self.in_dialog:
@@ -427,7 +434,7 @@ class App:
         cn = c.encode()
         if cn != b'\x1b':
             return cn
-        next_c = get().encode()
+        next_c = str(get()).encode()
         if next_c == b'[':
             # this is a Control Sequence Introducer
             while next_c in self._control_seq_parts:
@@ -660,6 +667,7 @@ class App:
     @data.setter
     def data(self, data):
         self.tag_data = data.get('tags', dict())
+        self.tags.update(data.get('tag definitions', dict()))
         for tag in self.tags:
             self.tag_data.setdefault(tag, dict())
 
@@ -928,7 +936,10 @@ class App:
         buttons = {
             't':'exit',
             'Enter':'edit tag',
-            'n':'new tag'
+            'n':'new tag',
+            'd':'delete tag',
+            'u':'undo',
+            'r':'redo'
         }
         self.win.move(1, self.table_x0-1)
         for key, desc in buttons.items():
@@ -939,7 +950,10 @@ class App:
             self.win.addstr(' ')
             self.win.addstr(key+':', curses.color_pair(100))
             self.win.addstr(' '+desc)
-        self.win.move(2, self.table_x0-2)
+        if self.tag_error:
+            self.win.addstr(2, self.table_x0, self.tag_error,
+                            curses.color_pair(102))
+            self.tag_error = None
         self.indentation = {'name': max(len(c) for c in self.tags)}
         header = 'name'.ljust(self.indentation['name'])
         for tc in tag_characteristics:
@@ -969,31 +983,44 @@ class App:
             self.win.addstr(ypos, self.table_x0, text[:ind], attr)
         if self.add_tag:
             self._tag_edit()
-            self.add_tag = False
 
     def _tag_dialog(self, cn):
+        if self.serious and cn != b'd':
+            self.serious = False
         if cn == b't':
             self.in_tag_dialog = False
             self.stdscr.addstr(0, 0,
                                'Loading ...'.ljust(curses.COLS)[:curses.COLS-1])
             self.stdscr.refresh()
-            if self._dialog_changed:
-                self._update_now = True
         elif cn == b'\n':
             for i, tag in enumerate(sorted(self.tags)):
                 if i==self.tag_pointer:
                     break
             self._tag_edit(tag)
-            self._dialog_changed = True
         elif cn == b'n':
             self.tag_pointer = len(self.tags)
             self.add_tag = True
+        elif cn == b'd':
+            for i, tag in enumerate(sorted(self.tags)):
+                if i==self.tag_pointer:
+                    break
+            if self.tag_data.get(tag) and not self.serious:
+                self.tag_error = f'The tag {tag} contains data. ' \
+                                 'Press d again if you realy want to delete it.'
+                self.serious = True
+            else:
+                self.remove_tag(tag)
+                self.serious = False
         elif cn == b'KEY_UP':
             self.tag_pointer -= 1
             self.tag_pointer %= len(self.tags)
         elif cn == b'KEY_DOWN':
             self.tag_pointer += 1
             self.tag_pointer %= len(self.tags)
+        elif cn == b'u' and stack().canundo():
+            stack().undo()
+        elif cn == b'r' and stack().canredo():
+            stack().redo()
 
     def _tag_edit(self, tag_name=None):
         info = self.tags.get(tag_name, dict())
@@ -1016,14 +1043,17 @@ class App:
             box = Textbox(editwin)
             box.edit()
             return box.gather().strip()
-        print_status('Enter a name!')
-        new_name = get_value(tag_name)
+        if not tag_name:
+            print_status('Enter a name!')
+            tag_name = get_value(tag_name)
         xpos += self.indentation['name']+1
         new_info = dict()
         print_status('Press a letter key!')
         used_keyes = {t['key'] for t in self.tags.values()}
+        current_key = info.get('key', '')
+        used_keyes -= {current_key}
         while True:
-            self.stdscr.addstr(ypos, xpos, info.get('key', ''))
+            self.stdscr.addstr(ypos, xpos, current_key)
             self.stdscr.refresh()
             key = self.stdscr.getkey(ypos, xpos)
             if key in used_keyes:
@@ -1056,9 +1086,70 @@ class App:
         xpos += self.indentation['col_width']+1
         print_status('Enter a description!')
         new_info['desc'] = get_value(info.get('desc', ''))
-        if tag_name in self.tags:
+        self.set_tag_definition(tag_name, new_info)
+        for i, tag in enumerate(sorted(self.tags)):
+            self.tag_pointer = i
+            if tag == tag_name:
+                break
+
+    @undoable
+    def set_tag_definition(self, tag_name, new_info):
+        old_info = self.tags.get(tag_name)
+        self.tags[tag_name] = new_info
+        if old_info is None:
+            self.tag_data.setdefault(tag_name, dict())
+            self.ordered_columns = [tag_name] + self.ordered_columns
+            self.show_columns.add(tag_name)
+            self.df.insert(0, tag_name, '-')
+            desc = f'create tag {tag_name}.'
+        else:
+            desc = f'edit tag {tag_name}.'
+        self.header = self._str_from_line()
+        self.stale_lines = set(range(self.total_lines))
+        logging.info(desc)
+        self.save_tag_definitions()
+        yield desc
+        logging.info('undoing ' + desc)
+        if old_info is None:
+            self.ordered_columns.remove(tag_name)
+            self.show_columns.remove(tag_name)
             del self.tags[tag_name]
-        self.tags[new_name] = new_info
+            del self.tag_data[tag_name]
+            del self.df[tag_name]
+        else:
+            self.tags[tag_name] = old_info
+        self.header = self._str_from_line()
+        self.stale_lines = set(range(self.total_lines))
+        self.save_tag_definitions()
+
+    @undoable
+    def remove_tag(self, tag_name):
+        old_def = self.tags[tag_name]
+        old_data = self.tag_data[tag_name]
+        del self.tags[tag_name]
+        del self.tag_data[tag_name]
+        self.show_columns -= {tag_name}
+        self.ordered_columns.remove(tag_name)
+        df_dat = None
+        if tag_name in self.df:
+            df_dat = self.df[tag_name]
+            del self.df[tag_name]
+            self.stale_lines = set(range(self.total_lines))
+            self.header = self._str_from_line()
+        desc = f'remove tag {tag_name}'
+        logging.info(desc)
+        self.save_tag_definitions()
+        yield desc
+        logging.info('undoing '+desc)
+        self.tags[tag_name] = old_def
+        self.tag_data[tag_name] = old_data
+        self.ordered_columns = [tag_name] + self.ordered_columns
+        self.show_columns.add(tag_name)
+        self.df.insert(0, tag_name, '-')
+        if df_dat is not None:
+            self.df[tag_name] = df_dat
+        self.header = self._str_from_line()
+        self.stale_lines = set(range(self.total_lines))
         self.save_tag_definitions()
 
     _helptext = """
