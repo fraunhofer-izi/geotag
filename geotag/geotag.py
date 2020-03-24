@@ -489,6 +489,8 @@ class App:
         elif cn == b't':
             self._dialog_changed = False
             self.in_tag_dialog = True
+        elif cn == b'o':
+            os.system('tmux select-layout main-vertical')
         elif cn == b'KEY_UP':
             self.pointer -= 1
             self.pointer %= self.total_lines
@@ -591,7 +593,6 @@ class App:
                 pattern = '|'.join(f'SAMPLE = {id}' for id in ids)
                 less = f'less -p "{pattern}" "{file}"'
                 os.system('tmux split-window -h {less}')
-                os.system('tmux select-layout main-vertical')
             else:
                 logging.error(f'Could not find {file}')
                 self.error = f'Could not find soft file for {gse}.'
@@ -1279,7 +1280,8 @@ class App:
         h             Show/hide help window.
         q             Save and quit geotag.
         v             View-dialog.
-        t             Tag dialog.
+        t             Tag-dialog.
+        o             Organize tmux panes.
         Up            Move upward.
         Down          Move downward.
         Shift+Up      Select upward.
