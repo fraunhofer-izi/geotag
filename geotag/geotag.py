@@ -1132,7 +1132,7 @@ class App:
                     rectangle(self.stdscr, ypos-1, xpos-1,
                               ypos+hight, xpos+width)
                     for i, line in enumerate(default.splitlines()):
-                        if i+1>=hight:
+                        if i+1>hight:
                             break
                         editwin.addstr(i, 0, line[:width])
                 else:
@@ -1143,7 +1143,7 @@ class App:
                 return box.gather().strip()
             else:
                 for i, line in enumerate(default.splitlines()):
-                    if i+1>=hight:
+                    if i+1>hight:
                         break
                     self.stdscr.addstr(ypos+i, xpos, line[:width])
         if not tag_name:
