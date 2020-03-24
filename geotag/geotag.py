@@ -11,6 +11,8 @@ import logging
 import yaml
 from .undo import stack, undoable
 from pydoc import locate
+from datetime import datetime
+import glob
 
 # use system default localization
 locale.setlocale(locale.LC_ALL, 'C')
@@ -68,6 +70,13 @@ def main():
     parser.add_argument('--update',
                         help='Overwrite the cache.',
                         action="store_true")
+    parser.add_argument('--showKey',
+                        help='Show key stroke in status bar.',
+                        action="store_true")
+    parser.add_argument('--version',
+                        help='Display version.',
+                        action="version",
+                        version=App.__version__)
     args = parser.parse_args()
     if not os.environ.get('TMUX'):
         raise Exception('Please run geotag inside a tmux.')
@@ -88,17 +97,19 @@ def main():
             pickle.dump(app.cache, f)
 
 tcolors = [196, 203, 202, 208, 178, 148, 106, 71, 31, 26]
-tag_characteristics = ['key', 'type', 'col_width', 'desc']
+tag_characteristics = ['editor', 'key', 'type', 'col_width', 'desc']
 default_tags = {
     'quality':{
         'type':'int',
         'desc':'From 0 to 9.',
+        'editor':'dominik.otto',
         'key':'q',
         'col_width':8
     },
     'note':{
         'type':'str',
         'desc':'A note.',
+        'editor':'dominik.otto',
         'key':'n',
         'col_width':20
     }
@@ -125,14 +136,19 @@ class App:
     __version__ = '0.0.1'
 
     def __init__(self, rnaSeq, array, log, tags, output, user, softPath,
-                 **kwargs):
+                 showKey, **kwargs):
         logging.basicConfig(filename=log, filemode='a', level=logging.DEBUG,
                 format='[%(asctime)s] %(levelname)s: %(message)s')
+        self.output = output
+        self.n_backups = 10
+        self.backup_every_n_saves = 10
+        self.backup_base_name = self.output+'.backup_'
+        self.saves = 0
+        self.showKey = showKey
         self.log = log
         self.user = user
         self.array = array
         self.rnaSeq = rnaSeq
-        self.output = output
         self.softPath = softPath
         self.tags_file = tags
         self.error = None
@@ -328,7 +344,6 @@ class App:
         if not locs:
             return
         ordered_locs = list(locs)
-        logging.debug(self.df.columns)
         for j in ordered_locs:
             self.lines[j] = self._str_from_line(self.df.iloc[j, :])
         self.stale_lines -= locs
@@ -368,7 +383,7 @@ class App:
                 ('tagging', self.current_tag, 100),
                 ('selected', sel_status, 100),
             ]
-            if cn:
+            if cn and self.showKey:
                 status_bar.append(('key', str(cn), 100))
             if stack().canundo():
                 status_bar.append(('undoable', stack().undotext(), 100))
@@ -394,9 +409,9 @@ class App:
             if self.print_help:
                 self._print_help()
             if self.in_dialog:
-                self._view_dialoge()
+                self._view_dialog()
             elif self.in_tag_dialog:
-                self._view_tag_dialoge()
+                self._view_tag_dialog()
             if not self.add_tag:
                 cn = self.get_key(stdscr)
             else:
@@ -558,8 +573,12 @@ class App:
             self.top = self.total_lines-nlines-1
             self.pointer = self.total_lines-1
             self.selection = {self.pointer}
-        elif cn == b'u' and stack().canundo():
-            stack().undo()
+        elif cn == b'u':
+            if stack().canundo():
+                stack().undo()
+            else:
+                self.error = 'Cannot undo. Manually recover one of the ' \
+                             'backups instead: ' + self.backup_base_name + '*'
         elif cn == b'r' and stack().canredo():
             stack().redo()
         elif cn == b'\n':
@@ -729,6 +748,25 @@ class App:
         self.last_saver_pid = os.fork()
         if self.last_saver_pid == 0:
             save = self.data
+            if self.saves % self.backup_every_n_saves == 0:
+                dt = datetime.today().strftime('%Y-%m-%d-%H:%M:%S')
+                backup_name = self.backup_base_name+dt
+                logging.info('Writing backup '+backup_name)
+                try:
+                    os.rename(self.output, backup_name)
+                except FileNotFoundError:
+                    pass
+                except BaseException as e:
+                    logging.error('Error writing backup.')
+                    logging.error(e)
+                written = sorted(glob.glob(self.backup_base_name+'*'))
+                if len(written) > self.n_backups:
+                    logging.info('Deleting old backup '+written[0])
+                    try:
+                        os.unlink(written[0])
+                    except BaseException as e:
+                        logging.error('Error deleting old backup.')
+                        logging.error(e)
             try:
                 with open(self.output+'.tmp', 'w') as f:
                     f.write(yaml.dump(save))
@@ -738,6 +776,8 @@ class App:
                 logging.error(e)
                 os._exit(1)
             os._exit(0)
+
+        self.saves += 1
 
     def _print_help(self):
         help = self.helptext
@@ -754,7 +794,7 @@ class App:
 
     _window_width = 120
 
-    def _view_dialoge(self):
+    def _view_dialog(self):
         self.table_y0 = 5
         self.table_x0 = 6
         hight = min(len(self.ordered_columns)+self.table_y0+2, curses.LINES-4)
@@ -925,7 +965,7 @@ class App:
                 self.color_by = col
             self._dialog_changed = True
 
-    def _view_tag_dialoge(self):
+    def _view_tag_dialog(self):
         self.table_y0 = 4
         self.table_x0 = 2
         hight = min(len(self.ordered_columns)+self.table_y0+2, curses.LINES-4)
@@ -1034,20 +1074,26 @@ class App:
             self.stdscr.addstr(4, self.table_x0+2, status.ljust(ind)[:ind],
                                curses.color_pair(color))
             self.stdscr.refresh()
-        def get_value(default):
+        def get_value(default, no_get=False):
             width = total_width - xpos
             self.stdscr.addstr(ypos, xpos, ' '*width)
-            editwin = self.stdscr.subwin(1, width, ypos, xpos)
-            editwin.addstr(0, 0, default)
-            self.stdscr.refresh()
-            box = Textbox(editwin)
-            box.edit()
-            return box.gather().strip()
+            if not no_get:
+                editwin = self.stdscr.subwin(1, width, ypos, xpos)
+                editwin.addstr(0, 0, default[:width])
+                self.stdscr.refresh()
+                box = Textbox(editwin)
+                box.edit()
+                return box.gather().strip()
+            else:
+                self.stdscr.addstr(ypos, xpos, default[:width])
         if not tag_name:
             print_status('Enter a name!')
             tag_name = get_value(tag_name)
         xpos += self.indentation['name']+1
         new_info = dict()
+        get_value(self.user, no_get=True)
+        new_info['editor'] = self.user
+        xpos += self.indentation['editor']+1
         print_status('Press a letter key!')
         used_keyes = {t['key'] for t in self.tags.values()}
         current_key = info.get('key', '')
@@ -1087,10 +1133,6 @@ class App:
         print_status('Enter a description!')
         new_info['desc'] = get_value(info.get('desc', ''))
         self.set_tag_definition(tag_name, new_info)
-        for i, tag in enumerate(sorted(self.tags)):
-            self.tag_pointer = i
-            if tag == tag_name:
-                break
 
     @undoable
     def set_tag_definition(self, tag_name, new_info):
@@ -1108,6 +1150,10 @@ class App:
         self.stale_lines = set(range(self.total_lines))
         logging.info(desc)
         self.save_tag_definitions()
+        for i, tag in enumerate(sorted(self.tags)):
+            self.tag_pointer = i
+            if tag == tag_name:
+                break
         yield desc
         logging.info('undoing ' + desc)
         if old_info is None:
@@ -1121,6 +1167,10 @@ class App:
         self.header = self._str_from_line()
         self.stale_lines = set(range(self.total_lines))
         self.save_tag_definitions()
+        for i, tag in enumerate(sorted(self.tags)):
+            self.tag_pointer = i
+            if tag == tag_name:
+                break
 
     @undoable
     def remove_tag(self, tag_name):
@@ -1139,6 +1189,7 @@ class App:
         desc = f'remove tag {tag_name}'
         logging.info(desc)
         self.save_tag_definitions()
+        self.tag_pointer %= len(self.tags)
         yield desc
         logging.info('undoing '+desc)
         self.tags[tag_name] = old_def
@@ -1151,12 +1202,16 @@ class App:
         self.header = self._str_from_line()
         self.stale_lines = set(range(self.total_lines))
         self.save_tag_definitions()
+        for i, tag in enumerate(sorted(self.tags)):
+            self.tag_pointer = i
+            if tag == tag_name:
+                break
 
     _helptext = """
         h             Show/hide help window.
         q             Save and quit geotag.
-        f             Filter dialoge.
-        t             Tag dialoge.
+        f             Filter dialog.
+        t             Tag dialog.
         Up            Move upward.
         Down          Move downward.
         Shift+Up      Select upward.
