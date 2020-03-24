@@ -25,19 +25,15 @@ def main():
     parser.add_argument('--rnaSeq',
                         help='.RDS table containing the extraction status of '
                         'RNASeq studies.', type=str, metavar='path',
-                        #default='/mnt/ribolution/user_worktmp/dominik.otto/'
-                        #'tumor-deconvolution-dream-challenge/'
-                        #'extraction_stats_head.tsv')
-                        default="/home/dominik/rn_home/dominik.otto/Projects/"
-                        "geotag/data/extraction_stats.tsv")
+                        default='/mnt/ribolution/user_worktmp/dominik.otto/'
+                        'tumor-deconvolution-dream-challenge/'
+                        'extraction_stats.tsv')
     parser.add_argument('--array',
                         help='.RDS table containing the extraction status of '
                         'microarray studies.', type=str, metavar='path',
-                        #default='/mnt/ribolution/user_worktmp/dominik.otto/'
-                        #'tumor-deconvolution-dream-challenge/'
-                        #'extraction_stats_array.tsv')
-                        default="/home/dominik/rn_home/dominik.otto/Projects/"
-                        "geotag/data/extraction_stats_array.tsv")
+                        default='/mnt/ribolution/user_worktmp/dominik.otto/'
+                        'tumor-deconvolution-dream-challenge/'
+                        'extraction_stats_array.tsv')
     parser.add_argument('--user',
                         help='The user name under which to write tags and log.',
                         type=str, metavar='name',
@@ -45,18 +41,18 @@ def main():
     parser.add_argument('--log',
                         help='The file path for the log.',
                         type=str, metavar='path',
-                        default="/home/dominik/rn_home/dominik.otto/Projects/"
-                        f"geotag/data/{os.environ['USER']}.log")
+                        default="/mnt/ribolution/user_worktmp/dominik.otto/"
+                        f"geotag_collect/{os.environ['USER']}.log")
     parser.add_argument('--tags',
                         help='The file path for the tag yaml.',
                         type=str, metavar='path.yml',
-                        default="/home/dominik/rn_home/dominik.otto/Projects/"
-                        f"geotag/data/tags.yaml")
+                        default="/mnt/ribolution/user_worktmp/dominik.otto/"
+                        f"geotag_collect/tags.yaml")
     parser.add_argument('--output',
                         help='The output file path.',
                         type=str, metavar='path.yml',
-                        default="/home/dominik/rn_home/dominik.otto/Projects/"
-                        f"geotag/data/{os.environ['USER']}.yml")
+                        default="/mnt/ribolution/user_worktmp/dominik.otto/"
+                        f"geotag_collect/{os.environ['USER']}.yml")
     parser.add_argument('--softPath',
                         help='Path to the soft file directory.',
                         type=str, metavar='path.yml',
@@ -65,8 +61,8 @@ def main():
     parser.add_argument('--state',
                         help='Path to a cached state of geotag.',
                         type=str, metavar='path.pkl',
-                        default="/home/dominik/rn_home/dominik.otto/Projects/"
-                        f"geotag/data/{os.environ['USER']}.pkl")
+                        default="/mnt/ribolution/user_worktmp/dominik.otto/"
+                        f"geotag_collect/{os.environ['USER']}.pkl")
     parser.add_argument('--update',
                         help='Overwrite the cache.',
                         action="store_true")
