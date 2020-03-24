@@ -155,7 +155,7 @@ class App:
         print('Loading data ...')
         rnaSeq_df = pd.read_csv(self.rnaSeq, sep="\t", low_memory=False)
         array_df = pd.read_csv(self.array, sep="\t", low_memory=False)
-        self.raw_df = pd.concat([rnaSeq_df, array_df])
+        self.raw_df = pd.concat([rnaSeq_df, array_df], sort=True)
         self.raw_df.index = uniquify(self.raw_df['id'])
         smap_counts = self.raw_df['gse'].value_counts()
         self.raw_df['n_sample'] = smap_counts[self.raw_df['gse']].values
@@ -263,7 +263,7 @@ class App:
             tagd = pd.DataFrame.from_dict(tags, orient='index', columns=[col],
                                           dtype=locate(self.tags[col]['type']))
             data_frames.append(tagd)
-        r = pd.concat(data_frames, axis=1, join='outer').fillna('-')
+        r = pd.concat(data_frames, axis=1, join='outer', sort=False).fillna('-')
         for col, filter in self.filter.items():
             r = r[r[col].astype(str).str.contains(filter)]
         if self.sort_columns or self.sort_reverse_columns:
