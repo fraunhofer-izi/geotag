@@ -968,7 +968,6 @@ class App:
     tag_description_max_hight = 15
 
     def _view_tag_dialog(self):
-        logging.debug(f'tag pointer {self.tag_pointer}')
         self.table_y0 = 4
         self.table_x0 = 2
         self.max_tag_desc_hight = min(self.tag_description_max_hight,
@@ -983,25 +982,20 @@ class App:
                 obove_selected_hight = content_hight
             if i==self.tag_pointer:
                 selection_hight = info['desc'].count('\n')+1
-        logging.debug(f'obove {obove_selected_hight}')
         if i<self.tag_pointer:
             # pointed on a new tag
             content_hight += self.max_tag_desc_hight
             selection_hight = self.max_tag_desc_hight
-        logging.debug(f'selve {selection_hight}')
         hight = min(content_hight+self.table_y0+2, curses.LINES-4)
         width = min(self._window_width, curses.COLS-4)
         table_capacity = hight-self.table_y0-4
         if self.tag_pointer>=i:
             # the last entry is selected and no space for "..." needed
             table_capacity += 1
-        logging.debug(f'capacity {table_capacity}')
         if selection_hight > table_capacity:
             self.woffset = obove_selected_hight-1
-            logging.debug(f'metop {self.woffset}')
         else:
             self.woffset = obove_selected_hight+selection_hight-table_capacity-1
-            logging.debug(f'setting {self.woffset}')
         self.woffset = max(0, self.woffset)
         self.win = self.stdscr.subwin(hight, width, 2, 2)
         self.win.clear()
@@ -1161,9 +1155,11 @@ class App:
             self.stdscr.addstr(ypos, xpos, current_key)
             self.stdscr.refresh()
             key = self.stdscr.getkey(ypos, xpos)
+            if key == '\n':
+                key = current_key
             if key in used_keyes:
                 print_status('Hit an unused letter key!', 102)
-            elif key in 'abcdefghijklmnopqrstuvwxyz':
+            elif key in 'abcdefghijklmnopqrstuvwxyz' and key!='':
                 break
             else:
                 print_status('Hit a letter key!', 102)
