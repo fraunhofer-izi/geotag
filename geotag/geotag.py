@@ -620,7 +620,7 @@ class App:
             id = f'[{ids[0]} ...]'
         else:
             id = ids[0]
-        text = f"Enter {tag} for {id}: (hit Ctrl-G to send)"
+        text = f"Enter {tag} for {id}: (hit Ctrl+g to send)"
         self.stdscr.addstr(2, 4, text[:(width-4)])
         self.stdscr.refresh()
         current_texts = self.get_current_values(tag)
@@ -965,11 +965,44 @@ class App:
                 self.color_by = col
             self._dialog_changed = True
 
+    tag_description_max_hight = 15
+
     def _view_tag_dialog(self):
+        logging.debug(f'tag pointer {self.tag_pointer}')
         self.table_y0 = 4
         self.table_x0 = 2
-        hight = min(len(self.ordered_columns)+self.table_y0+2, curses.LINES-4)
+        self.max_tag_desc_hight = min(self.tag_description_max_hight,
+                                      curses.LINES-self.table_x0-6)
+        content_hight = 0
+        obove_selected_hight = 0
+        content_ypos = list()
+        for i, (tag, info) in enumerate(sorted(self.tags.items())):
+            content_hight += info['desc'].count('\n')+1
+            content_ypos.append(content_hight)
+            if i<self.tag_pointer:
+                obove_selected_hight = content_hight
+            if i==self.tag_pointer:
+                selection_hight = info['desc'].count('\n')+1
+        logging.debug(f'obove {obove_selected_hight}')
+        if i<self.tag_pointer:
+            # pointed on a new tag
+            content_hight += self.max_tag_desc_hight
+            selection_hight = self.max_tag_desc_hight
+        logging.debug(f'selve {selection_hight}')
+        hight = min(content_hight+self.table_y0+2, curses.LINES-4)
         width = min(self._window_width, curses.COLS-4)
+        table_capacity = hight-self.table_y0-4
+        if self.tag_pointer>=i:
+            # the last entry is selected and no space for "..." needed
+            table_capacity += 1
+        logging.debug(f'capacity {table_capacity}')
+        if selection_hight > table_capacity:
+            self.woffset = obove_selected_hight-1
+            logging.debug(f'metop {self.woffset}')
+        else:
+            self.woffset = obove_selected_hight+selection_hight-table_capacity-1
+            logging.debug(f'setting {self.woffset}')
+        self.woffset = max(0, self.woffset)
         self.win = self.stdscr.subwin(hight, width, 2, 2)
         self.win.clear()
         self.win.border()
@@ -1003,24 +1036,46 @@ class App:
             self.indentation[tc] = field_len
         ind = width-self.table_x0-1 if width-1>self.table_x0 else 0
         self.win.addstr(3, self.table_x0, header[:ind])
-        self.woffset = max(0, self.tag_pointer-hight+self.table_y0+3)
-        for i, tag in enumerate(sorted(self.tags)):
-            if i < self.woffset:
+        ypos = self.table_y0-self.woffset
+        if self.woffset > 0:
+            self.win.addstr(self.table_y0, self.table_x0, '...'[:ind])
+        self.tag_ypos = None
+        for i, (tag, info) in enumerate(sorted(self.tags.items())):
+            if self.woffset > 0 and ypos <= self.table_y0:
+                ypos += info['desc'].count('\n')+1
                 continue
-            elif self.woffset > 0 and i == self.woffset:
-                self.win.addstr(self.table_y0, self.table_x0, '...'[:ind])
-                continue
-            ypos = i+self.table_y0-self.woffset
-            if ypos+2 == hight:
+            if ypos+2 >= hight:
                 self.win.addstr(ypos, self.table_x0, '...'[:ind])
                 break
-            attr = curses.A_REVERSE if i==self.tag_pointer else curses.A_NORMAL
+            if i==self.tag_pointer:
+                attr = curses.A_REVERSE
+                self.tag_ypos = ypos
+            else:
+                attr = curses.A_NORMAL
             text = tag.ljust(self.indentation['name'])
+            desc_lines = info.get('desc', '').splitlines()
             for tc in tag_characteristics:
-                content = str(self.tags[tag].get(tc, ''))
                 indent = self.indentation[tc]
-                text += ' '+content.ljust(indent)
+                if tc != 'desc':
+                    content = str(self.tags[tag].get(tc, ''))
+                    text += ' '+content.ljust(indent)
+                else:
+                    x_desc_start = len(text)+1
+                    text += ' '+desc_lines[0].ljust(indent)
             self.win.addstr(ypos, self.table_x0, text[:ind], attr)
+            ypos += 1
+            for k, line in enumerate(desc_lines):
+                if k == 0:
+                    continue
+                if ypos+2 >= hight:
+                    self.win.addstr(ypos, self.table_x0, '...'[:ind])
+                    break
+                text = ' '*x_desc_start+line.ljust(self.indentation['desc'])
+                self.win.addstr(ypos, self.table_x0, text[:ind], attr)
+                ypos += 1
+        if self.tag_ypos is None:
+            # we musst be on a new line
+            self.tag_ypos = ypos
         if self.add_tag:
             self._tag_edit()
 
@@ -1046,7 +1101,7 @@ class App:
                     break
             if self.tag_data.get(tag) and not self.serious:
                 self.tag_error = f'The tag {tag} contains data. ' \
-                                 'Press d again if you realy want to delete it.'
+                                 'Hit d again if you realy want to delete it.'
                 self.serious = True
             else:
                 self.remove_tag(tag)
@@ -1066,7 +1121,7 @@ class App:
         info = self.tags.get(tag_name, dict())
         if tag_name is None:
             tag_name = ''
-        ypos = self.tag_pointer + self.table_y0 - self.woffset + 2
+        ypos = self.tag_ypos+2
         xpos = self.table_x0+2
         total_width = min(self._window_width, curses.COLS-4)
         ind = total_width - xpos if total_width>xpos else 0
@@ -1074,11 +1129,15 @@ class App:
             self.stdscr.addstr(4, self.table_x0+2, status.ljust(ind)[:ind],
                                curses.color_pair(color))
             self.stdscr.refresh()
-        def get_value(default, no_get=False):
+        def get_value(default, no_get=False, hight=1):
             width = total_width - xpos
             self.stdscr.addstr(ypos, xpos, ' '*width)
             if not no_get:
-                editwin = self.stdscr.subwin(1, width, ypos, xpos)
+                editwin = self.stdscr.subwin(hight, width, ypos, xpos)
+                editwin.clear()
+                if hight>1:
+                    rectangle(self.stdscr, ypos-1, xpos-1,
+                              ypos+hight, xpos+width)
                 editwin.addstr(0, 0, default[:width])
                 self.stdscr.refresh()
                 box = Textbox(editwin)
@@ -1094,7 +1153,7 @@ class App:
         get_value(self.user, no_get=True)
         new_info['editor'] = self.user
         xpos += self.indentation['editor']+1
-        print_status('Press a letter key!')
+        print_status('Hit a letter key!')
         used_keyes = {t['key'] for t in self.tags.values()}
         current_key = info.get('key', '')
         used_keyes -= {current_key}
@@ -1103,11 +1162,11 @@ class App:
             self.stdscr.refresh()
             key = self.stdscr.getkey(ypos, xpos)
             if key in used_keyes:
-                print_status('Press an unused letter key!', 102)
+                print_status('Hit an unused letter key!', 102)
             elif key in 'abcdefghijklmnopqrstuvwxyz':
                 break
             else:
-                print_status('Press a letter key!', 102)
+                print_status('Hit a letter key!', 102)
         new_info['key'] = key
         self.stdscr.addstr(ypos, xpos, key)
         xpos += self.indentation['key']+1
@@ -1130,8 +1189,14 @@ class App:
             print_status('Please enter a positive integer!', 102)
         new_info['col_width'] = int(cw)
         xpos += self.indentation['col_width']+1
-        print_status('Enter a description!')
-        new_info['desc'] = get_value(info.get('desc', ''))
+        print_status('Enter a description! (hit Ctrl+g to send)')
+        while True:
+            new_info['desc'] = get_value(info.get('desc', ''),
+                                         hight=self.max_tag_desc_hight)
+            if not new_info['desc']:
+                print_status('Enter a description! (hit Ctrl+g to send)', 102)
+            else:
+                break
         self.set_tag_definition(tag_name, new_info)
 
     @undoable
