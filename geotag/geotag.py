@@ -1125,20 +1125,27 @@ class App:
             self.stdscr.refresh()
         def get_value(default, no_get=False, hight=1):
             width = total_width - xpos
-            self.stdscr.addstr(ypos, xpos, ' '*width)
             if not no_get:
                 editwin = self.stdscr.subwin(hight, width, ypos, xpos)
                 editwin.clear()
                 if hight>1:
                     rectangle(self.stdscr, ypos-1, xpos-1,
                               ypos+hight, xpos+width)
-                editwin.addstr(0, 0, default[:width])
+                    for i, line in enumerate(default.splitlines()):
+                        if i+1>=hight:
+                            break
+                        editwin.addstr(i, 0, line[:width])
+                else:
+                    editwin.addstr(0, 0, default[:width])
                 self.stdscr.refresh()
                 box = Textbox(editwin)
                 box.edit()
                 return box.gather().strip()
             else:
-                self.stdscr.addstr(ypos, xpos, default[:width])
+                for i, line in enumerate(default.splitlines()):
+                    if i+1>=hight:
+                        break
+                    self.stdscr.addstr(ypos+i, xpos, line[:width])
         if not tag_name:
             print_status('Enter a name!')
             tag_name = get_value(tag_name)
