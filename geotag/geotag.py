@@ -702,9 +702,9 @@ class App:
             long_desc = f'removing tag data "{tag}" for {lids}'
             short_desc = f'delete {tag} for [{lids[0]}, ...]'
         logging.info(long_desc)
-        for id, index in zip(ids, lselected):
+        for id in ids:
             td.pop(id, None)
-            self.df.loc[self.df.index[index], tag] = self.missing_data_value
+        self.df.loc[self.df.index[lselected], tag] = self.missing_data_value
         self.save_tag_data()
         self.stale_lines.update(self.selection)
         yield short_desc
@@ -743,9 +743,9 @@ class App:
             long_desc = f'setting tag "{tag}" to "{log_val}" for {lids}'
             short_desc = f'{tag}={log_val} for [{lids[0]}, ...]'
         logging.info(long_desc)
-        for id, index in zip(ids, lselected):
+        for id in ids:
             td[id] = val
-            self.df.loc[self.df.index[index], tag] = val
+        self.df.loc[self.df.index[lselected], tag] = val
         self.save_tag_data()
         self.stale_lines.update(self.selection)
         yield short_desc
@@ -763,16 +763,15 @@ class App:
         self._view_state = view_state
 
     def save_tag_data(self):
-        if self.last_saver_pid:
-            try:
-                _, exit_code = os.waitpid(self.last_saver_pid, 0)
-            except ChildProcessError:
-                pass
-            if exit_code != 0:
-                self.error = f'Could not save!! log: {self.log}'
+        previous = self.last_saver_pid
         self.last_saver_pid = os.fork()
         if self.last_saver_pid == 0:
             save = self.data
+            if previous:
+                try:
+                    _, exit_code = os.waitpid(previous, 0)
+                except ChildProcessError:
+                    pass
             if self.saves % self.backup_every_n_saves == 0:
                 dt = datetime.today().strftime('%Y-%m-%d-%H:%M:%S')
                 backup_name = self.backup_base_name+dt
