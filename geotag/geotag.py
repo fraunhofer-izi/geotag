@@ -284,6 +284,8 @@ class App:
             return ' '*(width-1)+self.missing_data_value
         tag_dtype = self.tags.get(col, dict()).get('type', '')
         if tag_dtype == 'int':
+            if val is np.nan:
+                return ' '*(width-1)+self.missing_data_value
             text = f'%{width}d' % val
         else:
             text = str(val).splitlines()[0]
@@ -690,6 +692,9 @@ class App:
     @undoable
     def del_tag_data(self, tag, view_state):
         self._view_state = view_state
+        if self._update_now:
+            self.update_content()
+            self._update_now = False
         lselected = list(self.selection)
         ids = self._id_for_index(lselected)
         td = self.tag_data[tag]
@@ -716,14 +721,20 @@ class App:
                 td.pop(id, None)
             else:
                 td[id] = v
-        self.df.loc[self.df.index[lselected], tag] = old_df
         self.save_tag_data()
-        self.stale_lines.update(view_state['selection'])
         self._view_state = view_state
+        if self._update_now:
+            self.update_content()
+            self._update_now = False
+        self.df.loc[self.df.index[lselected], tag] = old_df
+        self.stale_lines.update(view_state['selection'])
 
     @undoable
     def set_tag(self, tag, val, view_state):
         self._view_state = view_state
+        if self._update_now:
+            self.update_content()
+            self._update_now = False
         lselected = list(self.selection)
         ids = self._id_for_index(lselected)
         td = self.tag_data[tag]
@@ -756,10 +767,13 @@ class App:
                 td.pop(id, None)
             else:
                 td[id] = v
-        self.df.loc[self.df.index[lselected], tag] = old_df
         self.save_tag_data()
-        self.stale_lines.update(view_state['selection'])
         self._view_state = view_state
+        if self._update_now:
+            self.update_content()
+            self._update_now = False
+        self.df.loc[self.df.index[lselected], tag] = old_df
+        self.stale_lines.update(view_state['selection'])
 
     def save_tag_data(self):
         previous = self.last_saver_pid
