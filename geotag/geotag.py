@@ -59,7 +59,6 @@ class App:
     __version__ = '0.0.1'
     missing_data_value = '-'
     tag_description_max_hight = 15
-    max_ids_per_log_entry = 1000
     _byte_numbers = {str(i).encode() for i in range(10)}
     _control_seq_parts = _byte_numbers.copy()
     _control_seq_parts.add(b';')
@@ -700,11 +699,7 @@ class App:
             short_desc = f'delete {tag} for {id}'
         else:
             lids = list(ids)
-            if len(lids) > self.max_ids_per_log_entry:
-                long_desc = f'removing tag data "{tag}" for '
-                            f'[{lids[:self.max_ids_per_log_entry]}, ...]'
-            else:
-                long_desc = f'removing tag data "{tag}" for {lids}'
+            long_desc = f'removing tag data "{tag}" for {lids}'
             short_desc = f'delete {tag} for [{lids[0]}, ...]'
         logging.info(long_desc)
         for id, index in zip(ids, lselected):
@@ -745,11 +740,7 @@ class App:
             short_desc = f'{tag}={log_val} for {id}'
         else:
             lids = list(ids)
-            if len(lids) > self.max_ids_per_log_entry:
-                long_desc = f'setting tag "{tag}" to "{log_val}" for '
-                            f'[{lids[:self.max_ids_per_log_entry]}, ...]'
-            else:
-                long_desc = f'setting tag "{tag}" to "{log_val}" for {lids}'
+            long_desc = f'setting tag "{tag}" to "{log_val}" for {lids}'
             short_desc = f'{tag}={log_val} for [{lids[0]}, ...]'
         logging.info(long_desc)
         for id, index in zip(ids, lselected):
