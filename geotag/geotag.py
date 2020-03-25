@@ -81,7 +81,9 @@ class App:
         rnaSeq_df = pd.read_csv(self.rnaSeq, sep="\t", low_memory=False)
         array_df = pd.read_csv(self.array, sep="\t", low_memory=False)
         self.raw_df = pd.concat([rnaSeq_df, array_df], sort=True)
-        self.raw_df.index = uniquify(self.raw_df['id'])
+        self.raw_df.index = uniquify(
+            self.raw_df['gse'].str.cat(self.raw_df['id'], sep='_')
+        )
         smap_counts = self.raw_df['gse'].value_counts()
         self.raw_df['n_sample'] = smap_counts[self.raw_df['gse']].values
         self._measured_col_width = dict()
@@ -602,7 +604,7 @@ class App:
             self.set_tag(tag, message, self._view_state)
 
     def _id_for_index(self, index):
-        return self.df["id"].iloc[index]
+        return self.df.index[index]
 
     view_attributes = {
         'selection',
