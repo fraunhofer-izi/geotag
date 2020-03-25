@@ -880,7 +880,7 @@ class App:
                 attr |= curses.color_pair(legend['sorted by'])
             elif col in self.sort_reverse_columns:
                 attr |= curses.color_pair(legend['reverse sorted by'])
-            filter = self.filter.get(col, '*')
+            filter = self.filter.get(col, '.*')
             text = col + ' '*(self.indentation-len(col)+1) + filter
             self.win.addstr(ypos, self.table_x0, text[:ind], attr)
             if col in self.tag_data:
