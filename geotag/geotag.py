@@ -70,6 +70,10 @@ class App:
         'col_pointer',
         'tag_pointer',
         'top',
+        'df',
+        'header',
+        'lines',
+        'stale_lines',
         'filter',
         'show_columns',
         'sort_columns',
@@ -654,10 +658,6 @@ class App:
 
     @_view_state.setter
     def _view_state(self, new_state):
-        for critical in ['filter', 'sort_columns', 'sort_reverse_columns',
-                         'color_by']:
-            if new_state.get(critical) is not getattr(self, critical):
-                self._update_now = True
         for key, value in new_state.items():
             setattr(self, key, value)
 
@@ -692,9 +692,6 @@ class App:
     @undoable
     def del_tag_data(self, tag, view_state):
         self._view_state = view_state
-        if self._update_now:
-            self.update_content()
-            self._update_now = False
         lselected = list(self.selection)
         ids = self._id_for_index(lselected)
         td = self.tag_data[tag]
@@ -723,18 +720,12 @@ class App:
                 td[id] = v
         self.save_tag_data()
         self._view_state = view_state
-        if self._update_now:
-            self.update_content()
-            self._update_now = False
         self.df.loc[self.df.index[lselected], tag] = old_df
         self.stale_lines.update(view_state['selection'])
 
     @undoable
     def set_tag(self, tag, val, view_state):
         self._view_state = view_state
-        if self._update_now:
-            self.update_content()
-            self._update_now = False
         lselected = list(self.selection)
         ids = self._id_for_index(lselected)
         td = self.tag_data[tag]
@@ -769,9 +760,6 @@ class App:
                 td[id] = v
         self.save_tag_data()
         self._view_state = view_state
-        if self._update_now:
-            self.update_content()
-            self._update_now = False
         self.df.loc[self.df.index[lselected], tag] = old_df
         self.stale_lines.update(view_state['selection'])
 
