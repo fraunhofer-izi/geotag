@@ -7,6 +7,11 @@ the [NCBI Gene Expression Omnibus](https://www.ncbi.nlm.nih.gov/geo/).
 /usr/bin/python3 -m pipx install git+ssh://git@ribogit.izi.fraunhofer.de/Dominik/geotag.git
 ```
 
+# Upgrade
+```
+/usr/bin/python3 -m pipx upgrade geotag
+```
+
 # Execution
 ```
 /usr/bin/python3 -m geotag

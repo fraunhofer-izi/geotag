@@ -56,7 +56,7 @@ def keypartmap(c):
 
 class App:
 
-    __version__ = '0.0.1'
+    __version__ = '0.0.2'
     missing_data_value = '-'
     tag_description_max_hight = 15
     _byte_numbers = {str(i).encode() for i in range(10)}
