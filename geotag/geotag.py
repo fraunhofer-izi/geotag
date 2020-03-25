@@ -311,6 +311,8 @@ class App:
         else:
             text = str(val).splitlines()[0]
         if len(text)>width:
+            if width < 3:
+                return '...'[:width]
             return text[:(width-3)]+'...'
         return text.rjust(width)
 
@@ -390,13 +392,29 @@ class App:
                 status_bar = [('error', self.error, 102)] + status_bar
                 self.error = None
             for name, content, color in status_bar:
-                y, x = stdscr.getyx()
                 name = f' {name}: '
+                y, x = stdscr.getyx()
                 space = curses.COLS-1-x
-                if y==curses.LINES-1 and len(name)+len(content)>space:
-                    stdscr.addstr(' ...'[:space])
+                if y<curses.LINES-1: # we have an extra line
+                    space += curses.COLS-1
+                if len(name)>space:
+                    if space < 4:
+                        stdscr.addstr(' ...'[:space])
+                        break
+                    stdscr.addstr(name[:(space-4)]+' ...',
+                    curses.color_pair(color))
                     break
                 stdscr.addstr(name, curses.color_pair(color))
+                y, x = stdscr.getyx()
+                space = curses.COLS-1-x
+                if y<curses.LINES-1: # we have an extra line
+                    space += curses.COLS-1
+                if len(content)>space:
+                    if space < 4:
+                        stdscr.addstr(' ...'[:space])
+                        break
+                    stdscr.addstr(content[:(space-4)]+' ...')
+                    break
                 stdscr.addstr(content)
             y, x = stdscr.getyx()
             stdscr.addstr(' '*(curses.COLS-x-1))
