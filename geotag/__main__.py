@@ -5,7 +5,6 @@ import argparse
 import os
 import pickle
 import curses
-import cProfile
 from .geotag import App
 
 def main():
@@ -83,4 +82,4 @@ def main():
             pickle.dump(app.cache, f)
 
 if __name__ == "__main__":
-    cProfile.run('main()', filename='prof.cprof')
+    main()
