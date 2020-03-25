@@ -141,6 +141,7 @@ class App:
         self.backup_base_name = self.output+'.backup_'
         self.saves = 0
         self.showKey = showKey
+        self.tmux_split_percentage = 50
         self.log = log
         self.user = user
         self.array = array
@@ -581,17 +582,31 @@ class App:
             stack().redo()
         elif cn == b'\n':
             index = list(self.selection)
-            gse = self.df["gse"].iloc[index[0]]
-            file = os.path.join(self.softPath, gse, gse+'_family.soft')
-            if os.path.exists(file):
+            local_df = self.df.iloc[index, :]
+            gses = local_df["gse"].unique()
+            files = dict()
+            not_found = set()
+            for gse in gses:
+                file = os.path.join(self.softPath, gse, gse+'_family.soft')
+                if os.path.exists(file):
+                    files[gse] = file
+                else:
+                    logging.error(f'Could not find {file}')
+                    not_found.add(gse)
+            max_panes = int(self.tmux_split_percentage/10)
+            if len(files) > max_panes:
+                self.error = f'Cannot open more than {max_panes} panes at once.'
+                return
+            if not_found:
+                self.error = f'Could not find soft file for {list(not_found)}.'
+            for gse, file in files.items():
                 logging.info(f'Opening {file}')
-                ids = self._id_for_index(list(self.selection))
+                pane_size = int(self.tmux_split_percentage/len(files))
+                ids = local_df["id"].loc[local_df["gse"]==gse].unique()
                 pattern = '|'.join(f'SAMPLE = {id}' for id in ids)
                 less = f'less -p "{pattern}" "{file}"'
-                os.system('tmux split-window -h {less}')
-            else:
-                logging.error(f'Could not find {file}')
-                self.error = f'Could not find soft file for {gse}.'
+                d = 'd' if len(files)>1 else ''
+                os.system(f'tmux split-window -{d}p {pane_size} -h {less}')
         else:
             if self.tags[self.current_tag]['type'] == 'int' \
                     and cn in self._byte_numbers:
