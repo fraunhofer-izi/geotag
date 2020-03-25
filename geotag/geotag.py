@@ -57,6 +57,8 @@ def keypartmap(c):
 class App:
     __version__ = '0.0.1'
 
+    missing_data_value = '-'
+
     def __init__(self, rnaSeq, array, log, tags, output, user, softPath,
                  showKey, **kwargs):
         logging.basicConfig(filename=log, filemode='a', level=logging.DEBUG,
@@ -186,7 +188,8 @@ class App:
             tagd = pd.DataFrame.from_dict(tags, orient='index', columns=[col],
                                           dtype=locate(self.tags[col]['type']))
             data_frames.append(tagd)
-        r = pd.concat(data_frames, axis=1, join='outer', sort=False).fillna('-')
+        r = pd.concat(data_frames, axis=1, join='outer', sort=False)\
+                .fillna(self.missing_data_value)
         for col, filter in self.filter.items():
             r = r[r[col].astype(str).str.contains(filter)]
         if self.sort_columns or self.sort_reverse_columns:
@@ -210,7 +213,8 @@ class App:
         tag_type = self.tags.get(self.color_by, dict()).get('type', '')
         if tag_type == 'int' or \
                 pd.api.types.is_numeric_dtype(r[self.color_by].dtype):
-            self.colmap = lambda x: 99 if x=='-' else int(x%10)+1
+            self.colmap = lambda x: \
+                99 if x==self.missing_data_value else int(x%10)+1
         else:
             cmap = {key:i%10+1 for i, key in
                     enumerate(sorted(set(r[self.color_by])-{None}))}
@@ -229,8 +233,8 @@ class App:
             curses.init_pair(i+1, col, -1)
 
     def _format(self, val, col, width):
-        if val=='-':
-            return ' '*(width-1)+'-'
+        if val==self.missing_data_value:
+            return ' '*(width-1)+self.missing_data_value
         tag_dtype = self.tags.get(col, dict()).get('type', '')
         if tag_dtype == 'int':
             text = f'%{width}d' % val
@@ -551,6 +555,8 @@ class App:
                 less = f'less -p "{pattern}" "{file}"'
                 d = 'd' if len(files)>1 else ''
                 os.system(f'tmux split-window -{d}p {pane_size} -h {less}')
+        elif cn == b'd':
+            self.del_tag_data(self.current_tag, self._view_state)
         else:
             if self.tags[self.current_tag]['type'] == 'int' \
                     and cn in self._byte_numbers:
@@ -653,6 +659,42 @@ class App:
         return {td[id] for id in ids if id in td}
 
     @undoable
+    def del_tag_data(self, tag, view_state):
+        self._view_state = view_state
+        lselected = list(self.selection)
+        ids = self._id_for_index(lselected)
+        td = self.tag_data[tag]
+        current =  {id:td.get(id) for id in ids}
+        if len(ids) == 1:
+            id = next(iter(ids))
+            short_desc = long_desc = f'removing tag data "{tag}" '\
+                                     f'for {id}'
+            short_desc = f'delete {tag} for {id}'
+        else:
+            lids = list(ids)
+            long_desc = f'removing tag data "{tag}" for {lids}'
+            short_desc = f'delete {tag} for [{lids[0]}, ...]'
+        logging.info(long_desc)
+        for id, index in zip(ids, lselected):
+            td.pop(id, None)
+            self.df.loc[self.df.index[index], tag] = self.missing_data_value
+        self.save_tag_data()
+        self.stale_lines.update(self.selection)
+        yield short_desc
+        logging.info('undoing '+long_desc)
+        for ind, (id, v) in enumerate(current.items()):
+            if v is None or np.isnan(v):
+                td.pop(id, None)
+                self.df.loc[self.df.index[lselected[ind]], tag] = \
+                    self.missing_data_value
+            else:
+                td[id] = v
+                self.df.loc[self.df.index[lselected[ind]], tag] = v
+        self.save_tag_data()
+        self.stale_lines.update(view_state['selection'])
+        self._view_state = view_state
+
+    @undoable
     def set_tag(self, tag, val, view_state):
         self._view_state = view_state
         lselected = list(self.selection)
@@ -684,8 +726,9 @@ class App:
         logging.info('undoing '+long_desc)
         for ind, (id, v) in enumerate(current.items()):
             if v is None or np.isnan(v):
-                del td[id]
-                self.df.loc[self.df.index[lselected[ind]], tag] = '-'
+                td.pop(id, None)
+                self.df.loc[self.df.index[lselected[ind]], tag] = \
+                    self.missing_data_value
             else:
                 td[id] = v
                 self.df.loc[self.df.index[lselected[ind]], tag] = v
@@ -1166,7 +1209,7 @@ class App:
             self.tag_data.setdefault(tag_name, dict())
             self.ordered_columns = [tag_name] + self.ordered_columns
             self.show_columns.add(tag_name)
-            self.df.insert(0, tag_name, '-')
+            self.df.insert(0, tag_name, self.missing_data_value)
             desc = f'create tag {tag_name}.'
         else:
             desc = f'edit tag {tag_name}.'
@@ -1220,7 +1263,7 @@ class App:
         self.tag_data[tag_name] = old_data
         self.ordered_columns = [tag_name] + self.ordered_columns
         self.show_columns.add(tag_name)
-        self.df.insert(0, tag_name, '-')
+        self.df.insert(0, tag_name, self.missing_data_value)
         if df_dat is not None:
             self.df[tag_name] = df_dat
         self.header = self._str_from_line()
@@ -1237,6 +1280,8 @@ class App:
         v             View-dialog.
         t             Tag-dialog.
         o             Organize tmux panes.
+        d             Delete tag info for selected samples.
+        0-9           Set tag info for selected samples.
         Up            Move upward.
         Down          Move downward.
         Shift+Up      Select upward.
