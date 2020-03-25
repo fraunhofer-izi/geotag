@@ -92,8 +92,8 @@ class App:
         Shift+Down    Select downward.
         Pageup        Move upward one page.
         Pagedown      Move down one page.
-        Shift+Pageup  Move upward one page.
-        ShiftPagedown Move down one page.
+        Shift+Pageup  Select upward one page.
+        ShiftPagedown Select down one page.
         Left          Move to the left hand side.
         Right         Move to the right hand side.
         Shift+Left    Move to the left by half a page.
