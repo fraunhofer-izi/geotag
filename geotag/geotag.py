@@ -56,7 +56,7 @@ def keypartmap(c):
 
 class App:
 
-    __version__ = '0.0.2'
+    __version__ = '0.0.3'
     missing_data_value = '-'
     tag_description_max_hight = 15
     _byte_numbers = {str(i).encode() for i in range(10)}
@@ -176,7 +176,7 @@ class App:
 
     def load_tag_definitions(self):
         try:
-            with open(self.tags_file, 'rb') as f:
+            with open(self.tags_file, 'r') as f:
                 self.tags.update(yaml.load(f, Loader=yaml.SafeLoader))
         except IOError:
             pass
@@ -475,6 +475,7 @@ class App:
             self.in_dialog = True
         elif cn == b't':
             self._dialog_changed = False
+            self.load_tag_definitions()
             self.in_tag_dialog = True
         elif cn == b'o':
             os.system('tmux select-layout main-vertical')
