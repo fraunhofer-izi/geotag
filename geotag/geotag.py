@@ -309,6 +309,7 @@ class App:
                 sel_status = str(len(self.selection))
             status_bar = [
                 ('help', 'h', 100),
+                ('position', f'{int(100*self.top/self.total_lines)}%', 100),
                 ('tagging', self.current_tag, 100),
                 ('selected', sel_status, 100),
             ]
