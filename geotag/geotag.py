@@ -704,6 +704,7 @@ class App:
         logging.info(long_desc)
         for id in ids:
             td.pop(id, None)
+        old_df = self.df.loc[self.df.index[lselected], tag]
         self.df.loc[self.df.index[lselected], tag] = self.missing_data_value
         self.save_tag_data()
         self.stale_lines.update(self.selection)
@@ -712,11 +713,9 @@ class App:
         for ind, (id, v) in enumerate(current.items()):
             if v is None or np.isnan(v):
                 td.pop(id, None)
-                self.df.loc[self.df.index[lselected[ind]], tag] = \
-                    self.missing_data_value
             else:
                 td[id] = v
-                self.df.loc[self.df.index[lselected[ind]], tag] = v
+        self.df.loc[self.df.index[lselected], tag] = old_df
         self.save_tag_data()
         self.stale_lines.update(view_state['selection'])
         self._view_state = view_state
@@ -745,6 +744,7 @@ class App:
         logging.info(long_desc)
         for id in ids:
             td[id] = val
+        old_df = self.df.loc[self.df.index[lselected], tag]
         self.df.loc[self.df.index[lselected], tag] = val
         self.save_tag_data()
         self.stale_lines.update(self.selection)
@@ -753,11 +753,9 @@ class App:
         for ind, (id, v) in enumerate(current.items()):
             if v is None or np.isnan(v):
                 td.pop(id, None)
-                self.df.loc[self.df.index[lselected[ind]], tag] = \
-                    self.missing_data_value
             else:
                 td[id] = v
-                self.df.loc[self.df.index[lselected[ind]], tag] = v
+        self.df.loc[self.df.index[lselected], tag] = old_df
         self.save_tag_data()
         self.stale_lines.update(view_state['selection'])
         self._view_state = view_state
