@@ -55,9 +55,55 @@ def keypartmap(c):
         return chr(c)
 
 class App:
-    __version__ = '0.0.1'
 
+    __version__ = '0.0.1'
     missing_data_value = '-'
+    tag_description_max_hight = 15
+    max_ids_per_log_entry = 1000
+    _byte_numbers = {str(i).encode() for i in range(10)}
+    _control_seq_parts = _byte_numbers.copy()
+    _control_seq_parts.add(b';')
+    _control_seq_parts.add(b'[')
+    _required_columns = {'id', 'gse'}
+    view_attributes = {
+        'selection',
+        'pointer',
+        'col_pointer',
+        'tag_pointer',
+        'top',
+        'filter',
+        'show_columns',
+        'sort_columns',
+        'sort_reverse_columns',
+        'ordered_columns',
+        'color_by'
+    }
+    _window_width = 120
+    _helptext = """
+        h             Show/hide help window.
+        q             Save and quit geotag.
+        v             View-dialog.
+        t             Tag-dialog.
+        o             Organize tmux panes.
+        d             Delete tag info for selected samples.
+        0-9           Set tag info for selected samples.
+        Up            Move upward.
+        Down          Move downward.
+        Shift+Up      Select upward.
+        Shift+Down    Select downward.
+        Pageup        Move upward one page.
+        Pagedown      Move down one page.
+        Shift+Pageup  Move upward one page.
+        ShiftPagedown Move down one page.
+        Left          Move to the left hand side.
+        Right         Move to the right hand side.
+        Shift+Left    Move to the left by half a page.
+        Shift+Right   Move to the right by half a page.
+        Home          Move to the start of the table.
+        End           Move to the end of the table.
+        Ctrl+a        Select all.
+        """.splitlines()
+
 
     def __init__(self, rnaSeq, array, log, tags, output, user, softPath,
                  showKey, **kwargs):
@@ -374,12 +420,6 @@ class App:
             else:
                 self._react(cn, nlines, tabcols)
 
-    _byte_numbers = {str(i).encode() for i in range(10)}
-    _control_seq_parts = _byte_numbers.copy()
-    _control_seq_parts.add(b';')
-    _control_seq_parts.add(b'[')
-    _required_columns = {'id', 'gse'}
-
     def get_key(self, win):
         def get():
             try:
@@ -606,20 +646,6 @@ class App:
     def _id_for_index(self, index):
         return self.df.index[index]
 
-    view_attributes = {
-        'selection',
-        'pointer',
-        'col_pointer',
-        'tag_pointer',
-        'top',
-        'filter',
-        'show_columns',
-        'sort_columns',
-        'sort_reverse_columns',
-        'ordered_columns',
-        'color_by'
-    }
-
     @property
     def _view_state(self):
         return {attr: getattr(self, attr) for attr in self.view_attributes}
@@ -670,12 +696,15 @@ class App:
         current =  {id:td.get(id) for id in ids}
         if len(ids) == 1:
             id = next(iter(ids))
-            short_desc = long_desc = f'removing tag data "{tag}" '\
-                                     f'for {id}'
+            long_desc = f'removing tag data "{tag}" for {id}'
             short_desc = f'delete {tag} for {id}'
         else:
             lids = list(ids)
-            long_desc = f'removing tag data "{tag}" for {lids}'
+            if len(lids) > self.max_ids_per_log_entry:
+                long_desc = f'removing tag data "{tag}" for '
+                            f'[{lids[:self.max_ids_per_log_entry]}, ...]'
+            else:
+                long_desc = f'removing tag data "{tag}" for {lids}'
             short_desc = f'delete {tag} for [{lids[0]}, ...]'
         logging.info(long_desc)
         for id, index in zip(ids, lselected):
@@ -712,12 +741,15 @@ class App:
             log_val = val
         if len(ids) == 1:
             id = next(iter(ids))
-            short_desc = long_desc = f'setting tag "{tag}" to '\
-                                     f'"{log_val}" for {id}'
+            long_desc = f'setting tag "{tag}" to "{log_val}" for {id}'
             short_desc = f'{tag}={log_val} for {id}'
         else:
             lids = list(ids)
-            long_desc = f'setting tag "{tag}" to "{log_val}" for {lids}'
+            if len(lids) > self.max_ids_per_log_entry:
+                long_desc = f'setting tag "{tag}" to "{log_val}" for '
+                            f'[{lids[:self.max_ids_per_log_entry]}, ...]'
+            else:
+                long_desc = f'setting tag "{tag}" to "{log_val}" for {lids}'
             short_desc = f'{tag}={log_val} for [{lids[0]}, ...]'
         logging.info(long_desc)
         for id, index in zip(ids, lselected):
@@ -793,8 +825,6 @@ class App:
         if hight-1 < len(help):
             self.win.addstr(i, 1, ' '*(width-2))
             self.win.addstr(i, 5, '...'[:width-6])
-
-    _window_width = 120
 
     def _view_dialog(self):
         self.table_y0 = 5
@@ -966,8 +996,6 @@ class App:
             else:
                 self.color_by = col
             self._dialog_changed = True
-
-    tag_description_max_hight = 15
 
     def _view_tag_dialog(self):
         self.table_y0 = 4
@@ -1276,31 +1304,6 @@ class App:
             self.tag_pointer = i
             if tag == tag_name:
                 break
-
-    _helptext = """
-        h             Show/hide help window.
-        q             Save and quit geotag.
-        v             View-dialog.
-        t             Tag-dialog.
-        o             Organize tmux panes.
-        d             Delete tag info for selected samples.
-        0-9           Set tag info for selected samples.
-        Up            Move upward.
-        Down          Move downward.
-        Shift+Up      Select upward.
-        Shift+Down    Select downward.
-        Pageup        Move upward one page.
-        Pagedown      Move down one page.
-        Shift+Pageup  Move upward one page.
-        ShiftPagedown Move down one page.
-        Left          Move to the left hand side.
-        Right         Move to the right hand side.
-        Shift+Left    Move to the left by half a page.
-        Shift+Right   Move to the right by half a page.
-        Home          Move to the start of the table.
-        End           Move to the end of the table.
-        Ctrl+a        Select all.
-        """.splitlines()
 
     @property
     def helptext(self):
