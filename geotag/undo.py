@@ -20,10 +20,7 @@
 __version__ = '0.5.1'
 __author__ = 'David Townshend'
 
-__all__ = ['undoable', 'group', 'Stack', 'stack', 'setstack']
-
 import contextlib
-
 from collections import deque
 
 class _Action:
