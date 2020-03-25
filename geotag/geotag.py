@@ -190,7 +190,7 @@ class App:
     def save_tag_definitions(self):
         temp_out = self.tags_file+'.'+self.user
         with open(temp_out, 'w') as f:
-            f.write(yaml.dump(self.tags))
+            f.write(yaml.dump(self.tags, default_flow_style=False))
         os.rename(temp_out, self.tags_file)
 
     def col_widths(self):
@@ -792,7 +792,7 @@ class App:
                         logging.error(e)
             try:
                 with open(self.output+'.tmp', 'w') as f:
-                    f.write(yaml.dump(save))
+                    f.write(yaml.dump(save, default_flow_style=False))
                 os.rename(self.output+'.tmp', self.output)
             except BaseException as e:
                 logging.error('Error writing tag data.')
