@@ -33,7 +33,7 @@ default_tags = {
                '6 - stressed or impure cells\n'
                '7\n'
                '8 - perfectly pure and unmodified cells\n'
-               '9 - total RNA seq Protokoll',
+               '9 - total RNA seq protocol',
         'editor':'dominik.otto',
         'key':'q',
         'col_width':8
