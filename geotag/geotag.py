@@ -858,9 +858,9 @@ class App:
         legend = {
             'legend:':103,
             'deactivated':102,
-            'sorted by':101,
-            'reverse sorted by':105,
-            'color by':104
+            'sorted':101,
+            'reverse sorted':105,
+            'colored':104
         }
         self.win.move(2, self.table_x0-2)
         for lable, col in legend.items():
