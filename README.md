@@ -6,7 +6,7 @@ the [NCBI Gene Expression Omnibus](https://www.ncbi.nlm.nih.gov/geo/).
 /usr/bin/python3 -m pip install --user pipx
 /usr/bin/python3 -m pipx install git+ssh://git@ribogit.izi.fraunhofer.de/Dominik/geotag.git
 ```
-If you have not setup to connect to gitlab by ssh you can also use the https-link:
+If you have not setup to connect to gitlab by ssh you can **alternatively** use the https-link:
 ```
 /usr/bin/python3 -m pipx install git+https://ribogit.izi.fraunhofer.de/Dominik/geotag
 ```
