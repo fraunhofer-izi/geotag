@@ -82,7 +82,6 @@ class App:
         'top',
         'df',
         'header',
-        'lines',
         'stale_lines',
         'filter',
         'show_columns',
@@ -731,7 +730,7 @@ class App:
         self.save_tag_data()
         self._view_state = view_state
         self.df.loc[self.df.index[lselected], tag] = old_df
-        self.stale_lines.update(view_state['selection'])
+        self.stale_lines = set(range(self.total_lines))
 
     @undoable
     def set_tag(self, tag, val, view_state):
@@ -771,7 +770,7 @@ class App:
         self.save_tag_data()
         self._view_state = view_state
         self.df.loc[self.df.index[lselected], tag] = old_df
-        self.stale_lines.update(view_state['selection'])
+        self.stale_lines = set(range(self.total_lines))
 
     def save_tag_data(self):
         previous = self.last_saver_pid
