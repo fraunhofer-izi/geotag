@@ -99,6 +99,7 @@ class App:
         o             Organize tmux panes.
         d             Delete tag info for selected samples.
         0-9           Set tag info for selected samples.
+        Enter         Show sample in gse-soft-file.
         Up            Move upward.
         Down          Move downward.
         Shift+Up      Select upward.
