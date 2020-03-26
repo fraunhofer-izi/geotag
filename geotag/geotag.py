@@ -94,6 +94,8 @@ class App:
     _helptext = """
         h             Show/hide help window.
         q             Save and quit geotag.
+        u             Undo.
+        r             Redo.
         v             View-dialog.
         t             Tag-dialog.
         o             Organize tmux panes.
