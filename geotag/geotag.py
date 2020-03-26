@@ -889,11 +889,11 @@ class App:
             if col not in self.show_columns:
                 attr |= curses.color_pair(legend['deactivated'])
             elif col == self.color_by:
-                attr |= curses.color_pair(legend['color by'])
+                attr |= curses.color_pair(legend['colored'])
             elif col in self.sort_columns:
-                attr |= curses.color_pair(legend['sorted by'])
+                attr |= curses.color_pair(legend['sorted'])
             elif col in self.sort_reverse_columns:
-                attr |= curses.color_pair(legend['reverse sorted by'])
+                attr |= curses.color_pair(legend['reverse sorted'])
             filter = self.filter.get(col, '.*')
             text = col + ' '*(self.indentation-len(col)+1) + filter
             self.win.addstr(ypos, self.table_x0, text[:ind], attr)
