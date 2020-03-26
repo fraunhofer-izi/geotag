@@ -29,11 +29,11 @@ default_tags = {
                '2 - bad sample\n'
                '3 - cell mixture\n'
                '4 - modified cells (knock-down or spike-in)\n'
-               '5 - stressed or impure cells\n'
-               '6 - potentially stressed or impure\n'
-               '7 - perfectly pure and unmodified cells\n'
-               '8 - purity confirmed in the soft file\n'
-               '9 - purity confirmed in the paper',
+               '5\n'
+               '6 - stressed or impure cells\n'
+               '7\n'
+               '8 - perfectly pure and unmodified cells\n'
+               '9 - total RNA seq Protokoll',
         'editor':'dominik.otto',
         'key':'q',
         'col_width':8
