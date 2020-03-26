@@ -168,7 +168,6 @@ class App:
         self.last_saver_pid = None
         self.color_by = 'quality'
         self.current_tag = 'quality'
-        self.sort_reverse_columns.add('n_sample')
         self.tags = dict()
         self.tag_data = dict()
         if not os.path.exists(self.output):
@@ -218,8 +217,8 @@ class App:
         ordered_columns = ['id']
         ordered_columns += list(self.tags.keys())
         ordered_columns += [
-            'gse',
             'n_sample',
+            'gse',
             'technology',
             'status',
             'coarse.cell.type',
@@ -235,6 +234,9 @@ class App:
             if c not in ordered_columns:
                 ordered_columns.append(c)
         self.ordered_columns = ordered_columns
+        self.sort_columns.add('gse')
+        self.sort_columns.add('coarse.cell.type')
+        self.sort_reverse_columns.add('n_sample')
 
     def toggl_help(self, to: bool=None):
         if to is not None:
