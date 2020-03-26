@@ -139,7 +139,7 @@ class App:
         self.rnaSeq = rnaSeq
         self.softPath = softPath
         self.tags_file = tags
-        self.error = None
+        self.error = ''
         print('Loading data ...')
         rnaSeq_df = pd.read_csv(self.rnaSeq, sep="\t", low_memory=False)
         array_df = pd.read_csv(self.array, sep="\t", low_memory=False)
@@ -391,7 +391,7 @@ class App:
                 status_bar.append(('redoable', stack().redotext(), 100))
             if self.error:
                 status_bar = [('error', self.error, 102)] + status_bar
-                self.error = None
+                self.error = ''
             for name, content, color in status_bar:
                 name = f' {name}: '
                 y, x = stdscr.getyx()
@@ -651,14 +651,24 @@ class App:
                     not_found.add(gse)
             max_panes = int(self.tmux_split_percentage/10)
             if len(files) > max_panes:
-                self.error = f'Cannot open more than {max_panes} panes at once.'
+                self.error = \
+                    f'Cannot open more than {max_panes} panes at once. '
                 return
             if not_found:
-                self.error = f'Could not find soft file for {list(not_found)}.'
+                self.error = \
+                    f'Could not find soft file for {list(not_found)}. '
             for gse, file in files.items():
                 logging.info(f'Opening {file}')
                 pane_size = int(self.tmux_split_percentage/len(files))
                 ids = local_df["id"].loc[local_df["gse"]==gse].unique()
+                if len(ids) > 10:
+                    if self.error:
+                        self.error += ' '
+                    message = f'Too many samples selected for {gse}. ' \
+                        'Marking only the first 10.'
+                    self.error += message
+                    ids = ids[:10]
+                    logging.debug(self.error)
                 pattern = '|'.join(f'SAMPLE = {id}' for id in ids)
                 less = f'less -p "{pattern}" "{file}"'
                 d = 'd' if len(files)>1 else ''
