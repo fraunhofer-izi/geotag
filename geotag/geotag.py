@@ -668,7 +668,6 @@ class App:
                         'Marking only the first 10.'
                     self.error += message
                     ids = ids[:10]
-                    logging.debug(self.error)
                 pattern = '|'.join(f'SAMPLE = {id}' for id in ids)
                 less = f'less -p "{pattern}" "{file}"'
                 d = 'd' if len(files)>1 else ''
@@ -1265,12 +1264,13 @@ class App:
         xpos += self.indentation['key']+1
         print_status('Enter a type!')
         ct = info.get('type', '')
-        while True:
-            ct = get_value(ct)
-            if ct in ['int', 'str']:
-                break
-            print_status('Please enter "int" for integer or "str" for string!',
-                         102)
+        if not ct:
+            while True:
+                ct = get_value(ct)
+                if ct in ['int', 'str']:
+                    break
+                print_status('Please enter "int" for integer or "str" '
+                             'for string!', 102)
         new_info['type'] = ct
         xpos += self.indentation['type']+1
         print_status('Enter a column width!')
