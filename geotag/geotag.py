@@ -66,7 +66,7 @@ def keypartmap(c):
 
 class App:
 
-    __version__ = '0.0.3'
+    __version__ = '0.0.4'
     missing_data_value = '-'
     tag_description_max_hight = 15
     _byte_numbers = {str(i).encode() for i in range(10)}
@@ -658,7 +658,7 @@ class App:
         box = Textbox(editwin)
         box.edit()
         message = box.gather().strip()
-        if message != current_text:
+        if message and message != current_text:
             self.set_tag(tag, message, self._view_state)
 
     def _id_for_index(self, index):
