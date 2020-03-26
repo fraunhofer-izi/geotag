@@ -108,12 +108,14 @@ class App:
         Pagedown      Move down one page.
         Shift+Pageup  Select upward one page.
         ShiftPagedown Select down one page.
+        Home          Move to the start of the table.
+        End           Move to the end of the table.
+        g             Go to position dialog.
+        G             Go to and add position to selection dialog.
         Left          Move to the left hand side.
         Right         Move to the right hand side.
         Shift+Left    Move to the left by half a page.
         Shift+Right   Move to the right by half a page.
-        Home          Move to the start of the table.
-        End           Move to the end of the table.
         Ctrl+a        Select all.
         """.splitlines()
 
@@ -372,9 +374,10 @@ class App:
                 sel_status = self._id_for_index(self.pointer)
             else:
                 sel_status = str(len(self.selection))
+            pos = f'{self.pointer} ({int(100*self.top/self.total_lines)}%)'
             status_bar = [
                 ('help', 'h', 100),
-                ('position', f'{int(100*self.top/self.total_lines)}%', 100),
+                ('position', pos, 100),
                 ('tagging', self.current_tag, 100),
                 ('selected', sel_status, 100),
             ]
@@ -519,6 +522,48 @@ class App:
             if self.pointer in self.selection:
                 self.selection.remove(old_pointer)
             self.selection.add(self.pointer)
+        elif cn == b'g':
+            xpos = 2
+            ypos = 2
+            hight = 1
+            text = 'position:'
+            width = min(curses.LINES-2-xpos, 10+len(text))
+            rectangle(self.stdscr, ypos-1, xpos-1,
+                      ypos+hight, xpos+width)
+            self.stdscr.addstr(ypos, xpos, text)
+            editwin = self.stdscr.subwin(hight, width-len(text),
+                                         ypos, xpos+len(text))
+            editwin.clear()
+            self.stdscr.refresh()
+            box = Textbox(editwin)
+            box.edit()
+            val = box.gather().strip()
+            if not val.isnumeric():
+                self.error = 'The entered position is not numeric.'
+            else:
+                self.pointer = min(self.total_lines-1, max(0, int(float(val))))
+                self.selection = {self.pointer}
+        elif cn == b'G':
+            xpos = 2
+            ypos = 2
+            hight = 1
+            text = 'position (add):'
+            width = min(curses.LINES-2-xpos, 10+len(text))
+            rectangle(self.stdscr, ypos-1, xpos-1,
+                      ypos+hight, xpos+width)
+            self.stdscr.addstr(ypos, xpos, text)
+            editwin = self.stdscr.subwin(hight, width-len(text),
+                                         ypos, xpos+len(text))
+            editwin.clear()
+            self.stdscr.refresh()
+            box = Textbox(editwin)
+            box.edit()
+            val = box.gather().strip()
+            if not val.isnumeric():
+                self.error = 'The entered position is not numeric.'
+            else:
+                self.pointer = min(self.total_lines-1, max(0, int(float(val))))
+                self.selection.add(self.pointer)
         elif cn == b'KEY_LEFT':
             if self.lrpos > 0:
                 self.lrpos -= 1
@@ -1220,7 +1265,7 @@ class App:
         cw = info.get('col_width', '')
         while True:
             cw = get_value(str(cw))
-            if cw.isnumeric() and int(cw)>0:
+            if cw.isnumeric() and int(float(cw))>0:
                 break
             print_status('Please enter a positive integer!', 102)
         new_info['col_width'] = int(cw)
