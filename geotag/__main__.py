@@ -8,7 +8,8 @@ import curses
 from .geotag import App
 
 def main():
-    desc = 'Interface to quickly tag geo data sets.'
+    desc = 'Interface to quickly tag geo data sets. Set a user through ' \
+           'the environemnt varoable USER.'
     parser = argparse.ArgumentParser(description=desc,
             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--rnaSeq',
@@ -23,10 +24,6 @@ def main():
                         default='/mnt/ribolution/user_worktmp/dominik.otto/'
                         'tumor-deconvolution-dream-challenge/'
                         'extraction_stats_array.tsv')
-    parser.add_argument('--user',
-                        help='The user name under which to write tags and log.',
-                        type=str, metavar='name',
-                        default=os.environ['USER'])
     parser.add_argument('--log',
                         help='The file path for the log.',
                         type=str, metavar='path',
@@ -63,6 +60,7 @@ def main():
                         action="version",
                         version=App.__version__)
     args = parser.parse_args()
+    args.user = os.environ['USER']
     if not os.environ.get('TMUX'):
         raise Exception('Please run geotag inside a tmux.')
     app = App(**vars(args))

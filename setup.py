@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="geotag",
-    version="0.0.4",
+    version="0.0.5",
     author="Dominik Otto",
     author_email="dominik.otto@gmail.com",
     description="Python tool to tag samples from GEO.",
