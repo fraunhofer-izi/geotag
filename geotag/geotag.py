@@ -782,8 +782,8 @@ class App:
         self.stale_lines.update(self.selection)
         yield short_desc
         logging.info('undoing '+long_desc)
-        for ind, (id, v) in enumerate(current.items()):
-            if v is None or np.isnan(v):
+        for id, v in enumerate(current.items()):
+            if v is None or v is np.nan:
                 td.pop(id, None)
             else:
                 td[id] = v
@@ -822,8 +822,8 @@ class App:
         self.stale_lines.update(self.selection)
         yield short_desc
         logging.info('undoing '+long_desc)
-        for ind, (id, v) in enumerate(current.items()):
-            if v is None or np.isnan(v):
+        for id, v in enumerate(current.items()):
+            if v is None or v is np.nan:
                 td.pop(id, None)
             else:
                 td[id] = v
