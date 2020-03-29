@@ -66,7 +66,7 @@ def keypartmap(c):
 
 class App:
 
-    __version__ = '0.0.5'
+    __version__ = '0.0.6'
     missing_data_value = '-'
     tag_description_max_hight = 15
     _byte_numbers = {str(i).encode() for i in range(10)}
@@ -92,33 +92,37 @@ class App:
     }
     _window_width = 120
     _helptext = """
-        h             Show/hide help window.
-        q             Save and quit geotag.
-        u             Undo.
-        r             Redo.
-        v             View-dialog.
-        t             Tag-dialog.
-        o             Organize tmux panes.
-        d             Delete tag info for selected samples.
-        0-9           Set tag info for selected samples.
-        Enter         Show sample in gse-soft-file.
-        Up            Move upward.
-        Down          Move downward.
-        Shift+Up      Select upward.
-        Shift+Down    Select downward.
-        Pageup        Move upward one page.
-        Pagedown      Move down one page.
-        Shift+Pageup  Select upward one page.
-        ShiftPagedown Select down one page.
-        Home          Move to the start of the table.
-        End           Move to the end of the table.
-        g             Go to position dialog.
-        G             Go to and add position to selection dialog.
-        Left          Move to the left hand side.
-        Right         Move to the right hand side.
-        Shift+Left    Move to the left by half a page.
-        Shift+Right   Move to the right by half a page.
-        Ctrl+a        Select all.
+        h               Show/hide help window.
+        q               Save and quit geotag.
+        u               Undo.
+        r               Redo.
+        v               View-dialog.
+        t               Tag-dialog.
+        o               Organize tmux panes.
+        d               Delete tag info for selected samples.
+        0-9             Set tag info for selected samples.
+        Enter           Show sample in gse-soft-file.
+        Up              Move upward.
+        Down            Move downward.
+        Shift+Up        Select upward.
+        Shift+Down      Select downward.
+        Ctrl+Up         Jump to next untagged entry above.
+        Ctrl+Donw       Jump to next untagged entry below.
+        Ctrl+Shift+Up   Add next untagged entry above to selection.
+        Ctrl+Shift+Down Add next untagged entry below to selection.
+        Pageup          Move upward one page.
+        Pagedown        Move down one page.
+        Shift+Pageup    Select upward one page.
+        ShiftPagedown   Select down one page.
+        Home            Move to the start of the table.
+        End             Move to the end of the table.
+        g               Go to position dialog.
+        G               Go to and add position to selection dialog.
+        Left            Move to the left hand side.
+        Right           Move to the right hand side.
+        Shift+Left      Move to the left by half a page.
+        Shift+Right     Move to the right by half a page.
+        Ctrl+a          Select all.
         """.splitlines()
 
 
@@ -525,6 +529,38 @@ class App:
             if self.pointer in self.selection:
                 self.selection.remove(old_pointer)
             self.selection.add(self.pointer)
+        elif cn == b'\x1b[1;5A': # Ctrl + Up
+            tags = self.df[self.current_tag].iloc[:self.pointer+1]
+            candidates = tags.index[tags==self.missing_data_value]
+            if len(candidates) > 0:
+                self.pointer = self.df.index.get_loc(candidates[-1])
+                self.selection = {self.pointer}
+            else:
+                self.error = 'No untagged entries above.'
+        elif cn == b'\x1b[1;5B': # Ctrl + Down
+            tags = self.df[self.current_tag].iloc[self.pointer:]
+            candidates = tags.index[tags==self.missing_data_value]
+            if len(candidates) > 0:
+                self.pointer = self.df.index.get_loc(candidates[0])
+                self.selection = {self.pointer}
+            else:
+                self.error = 'No untagged entries below.'
+        elif cn == b'\x1b[1;6A': # Ctrl + Shift + Up
+            tags = self.df[self.current_tag].iloc[:self.pointer+1]
+            candidates = tags.index[tags==self.missing_data_value]
+            if len(candidates) > 0:
+                self.pointer = self.df.index.get_loc(candidates[-1])
+                self.selection.add(self.pointer)
+            else:
+                self.error = 'No untagged entries above.'
+        elif cn == b'\x1b[1;6B': # Ctrl + Shift + Down
+            tags = self.df[self.current_tag].iloc[self.pointer:]
+            candidates = tags.index[tags==self.missing_data_value]
+            if len(candidates) > 0:
+                self.pointer = self.df.index.get_loc(candidates[0])
+                self.selection.add(self.pointer)
+            else:
+                self.error = 'No untagged entries below.'
         elif cn == b'g':
             xpos = 2
             ypos = 2
