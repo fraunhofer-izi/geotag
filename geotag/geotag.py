@@ -851,23 +851,19 @@ class App:
                 except FileNotFoundError:
                     pass
                 except BaseException as e:
-                    logging.error('Error writing backup.')
-                    logging.error(e)
+                    logging.error('Vould not write backup: '+str(e))
                 written = sorted(glob.glob(self.backup_base_name+'*'))
                 if len(written) > self.n_backups:
                     logging.info('Deleting old backup '+written[0])
                     try:
                         os.unlink(written[0])
                     except BaseException as e:
-                        logging.error('Error deleting old backup.')
-                        logging.error(e)
+                        logging.error('Could not delete old backup: '+str(e))
             try:
-                with open(self.output+'.tmp', 'w') as f:
+                with open(self.output, 'w') as f:
                     f.write(yaml.dump(save, default_flow_style=False))
-                os.rename(self.output+'.tmp', self.output)
             except BaseException as e:
-                logging.error('Error writing tag data.')
-                logging.error(e)
+                logging.error('Could not write tag data: '+str(e))
                 os._exit(1)
             os._exit(0)
 
