@@ -873,11 +873,8 @@ class App:
         self.last_saver_pid = os.fork()
         if self.last_saver_pid == 0:
             save = self.data
-            if previous:
-                try:
-                    _, exit_code = os.waitpid(previous, 0)
-                except ChildProcessError:
-                    pass
+            # Waiting does not work since children never die.
+            # This is likely due to curses.wrapper.
             if self.saves % self.backup_every_n_saves == 0:
                 dt = datetime.today().strftime('%Y-%m-%d-%H:%M:%S')
                 backup_name = self.backup_base_name+dt
