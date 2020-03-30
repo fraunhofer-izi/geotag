@@ -21,6 +21,7 @@ the [NCBI Gene Expression Omnibus](https://www.ncbi.nlm.nih.gov/geo/).
 There are issues for the installation, since we cannot use th lmod-python wich lacks a required function. So here **alternatively** do the following:
 ```
 git clone git@ribogit.izi.fraunhofer.de:Dominik/geotag.git
+/usr/bin/python3 -m pip install --user pandas numpy pyyaml
 PYTHONPATH=$PWD/geotag /usr/bin/python3 -m geotag
 ```
 If you want to start the application from another directory, make
