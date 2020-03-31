@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import os
-import pandas as pd
-import numpy as np
 import curses
 from curses.textpad import Textbox, rectangle
 import locale
 import logging
-import yaml
-from .undo import stack, undoable
 from pydoc import locate
 from datetime import datetime
 import glob
+import yaml
+import pandas as pd
+import numpy as np
+from .undo import stack, undoable
 
 # use system default localization
 locale.setlocale(locale.LC_ALL, 'C')
@@ -57,12 +57,6 @@ def uniquify(vals):
             newitem = "{}_{}".format(item, fudge)
         yield newitem
         seen.add(newitem)
-
-def keypartmap(c):
-    if c == 27:
-        return 'Alt'
-    else:
-        return chr(c)
 
 class App:
 
