@@ -768,7 +768,7 @@ class App:
 
     @property
     def cache(self):
-        return {'_view_state': self._view_state}
+        return {'_view_state': self._view_state, 'version':self.__version__}
 
     @cache.setter
     def cache(self, cache):
