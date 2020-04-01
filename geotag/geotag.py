@@ -1392,7 +1392,7 @@ class App:
     @property
     def helptext(self):
         h = self._helptext[:]
-        indent = 14
+        indent = 16
         for tag, info in self.tags.items():
             keys = 'Alt+' + info['key']
             space = ' '*max(1, indent-len(keys))
