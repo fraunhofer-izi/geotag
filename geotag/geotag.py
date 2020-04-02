@@ -928,12 +928,13 @@ class App:
     def _print_help(self):
         help = self.helptext
         hight = min(len(help)+1, curses.LINES-4)
-        width = min(80, curses.COLS-4)
+        text_width = max(len(line) for line in help)
+        width = min(text_width+8, curses.COLS-4)
         self.win = self.stdscr.subwin(hight, width, 2, 2)
         self.win.clear()
         self.win.border()
         for i in range(1, hight-1):
-            self.win.addstr(i, 5, help[i].strip()[:width-6])
+            self.win.addstr(i, 5, help[i][:width-6])
         if hight-1 < len(help):
             self.win.addstr(i, 1, ' '*(width-2))
             self.win.addstr(i, 5, '...'[:width-6])
@@ -1420,7 +1421,7 @@ class App:
 
     @property
     def helptext(self):
-        h = self._helptext[:]
+        h = [line.strip() for line in self._helptext]
         indent = 16
         for tag, info in self.tags.items():
             keys = 'Alt+' + info['key']
@@ -1429,5 +1430,8 @@ class App:
                 h.append(keys+space+'Make a '+tag+'.')
             else:
                 h.append(keys+space+'Start tagging '+tag+'.')
+        h.append('')
+        h.append('Log:')
+        h.append(self.log)
         return h
 
