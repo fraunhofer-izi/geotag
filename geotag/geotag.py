@@ -380,8 +380,9 @@ class App:
                 sel_status = self._id_for_index(self.pointer)
             else:
                 sel_status = str(len(self.selection))
-            pos = f'{self.pointer} ' \
-                  f'({int(100*self.pointer/(self.total_lines-1))}%)'
+                pos = f'{self.pointer}'
+            if self.total_lines > 1:
+                pos += f' ({int(100*self.pointer/(self.total_lines-1))}%)'
             status_bar = [
                 ('help', 'h', 100),
                 ('position', pos, 100),
@@ -415,7 +416,7 @@ class App:
                 space = curses.COLS-1-x
                 if y<curses.LINES-1: # we have an extra line
                     space += curses.COLS-1
-                if len(content)>space:
+                if content and len(content)>space:
                     if space < 4:
                         stdscr.addstr(' ...'[:space])
                         break
