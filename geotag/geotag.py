@@ -87,6 +87,8 @@ class App:
     _window_width = 120
     _helptext = """
         h               Show/hide help window.
+        s               Manual synchronous save.
+                        Automatic asynchronous saves are done after each action.
         q               Save and quit geotag.
         u               Undo.
         r               Redo.
@@ -499,6 +501,11 @@ class App:
             self._dialog_changed = False
             self.load_tag_definitions()
             self.in_tag_dialog = True
+        elif cn == b's':
+            self.stdscr.addstr(0, 0,
+                               'Saving ...'.ljust(curses.COLS)[:curses.COLS-1])
+            self.stdscr.refresh()
+            self.save_tag_data(async=False)
         elif cn == b'o':
             os.system('tmux select-layout main-vertical')
         elif cn == b'KEY_UP':
@@ -862,10 +869,17 @@ class App:
         self.df.loc[self.df.index[lselected], tag] = old_df
         self.stale_lines = set(range(self.total_lines))
 
-    def save_tag_data(self):
+    def save_tag_data(self, async=True):
         previous = self.last_saver_pid
-        self.last_saver_pid = os.fork()
-        if self.last_saver_pid == 0:
+        if async:
+            self.last_saver_pid = os.fork()
+        if not async and previous:
+            # we can wait for previous save
+            try:
+                _, exit_code = os.waitpid(previous, 0)
+            except ChildProcessError:
+                pass
+        if not async or self.last_saver_pid == 0:
             save = self.data
             # Waiting does not work since children never die.
             # This is likely due to curses.wrapper.
@@ -878,21 +892,29 @@ class App:
                 except FileNotFoundError:
                     pass
                 except BaseException as e:
-                    logging.error('Vould not write backup: '+str(e))
+                    err = 'Could not write backup: '+str(e)
+                    self.error += err
+                    logging.error(err)
                 written = sorted(glob.glob(self.backup_base_name+'*'))
                 if len(written) > self.n_backups:
                     logging.info('Deleting old backup '+written[0])
                     try:
                         os.unlink(written[0])
                     except BaseException as e:
-                        logging.error('Could not delete old backup: '+str(e))
+                        err = 'Could not delete old backup: '+str(e)
+                        self.error += ' ' + err
+                        logging.error(err)
             try:
                 with open(self.output, 'w') as f:
                     f.write(yaml.dump(save, default_flow_style=False))
             except BaseException as e:
-                logging.error('Could not write tag data: '+str(e))
-                os._exit(1)
-            os._exit(0)
+                err = 'Could not write tag data: '+str(e)
+                self.error += ' ' + err
+                logging.error(err)
+                if async:
+                    os._exit(1)
+            if async:
+                os._exit(0)
 
         self.saves += 1
 
