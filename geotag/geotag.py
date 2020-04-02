@@ -8,6 +8,7 @@ import logging
 from pydoc import locate
 from datetime import datetime
 import glob
+import random
 import yaml
 import pandas as pd
 import numpy as np
@@ -114,6 +115,7 @@ class App:
         End             Move to the end of the table.
         g               Go to position dialog.
         G               Go to and add position to selection dialog.
+        Space           Go to random entry.
         Left            Move to the left hand side.
         Right           Move to the right hand side.
         Shift+Left      Move to the left by half a page.
@@ -604,6 +606,9 @@ class App:
             else:
                 self.pointer = min(self.total_lines-1, max(0, int(float(val))))
                 self.selection.add(self.pointer)
+        elif cn == b' ':
+                self.pointer = random.randint(0, self.total_lines-1)
+                self.selection = {self.pointer}
         elif cn == b'KEY_LEFT':
             if self.lrpos > 0:
                 self.lrpos -= 1
