@@ -377,7 +377,7 @@ class App:
             self._print_body(self.header, self.lines, nlines, cols)
             curses.setsyx(nlines+2, 0)
             if len(self.selection) == 1:
-                sel_status = self._id_for_index(self.pointer)
+                sel_status = str(self._id_for_index(self.pointer))
             else:
                 sel_status = str(len(self.selection))
             pos = f'{self.pointer}'
