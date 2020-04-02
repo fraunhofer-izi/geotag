@@ -61,7 +61,7 @@ def uniquify(vals):
 
 class App:
 
-    __version__ = '0.0.6'
+    __version__ = '0.0.7'
     missing_data_value = '-'
     tag_description_max_hight = 15
     _byte_numbers = {str(i).encode() for i in range(10)}
@@ -88,17 +88,19 @@ class App:
     _window_width = 120
     _helptext = """
         h               Show/hide help window.
-        s               Manual synchronous save.
-                        Automatic asynchronous saves are done after each action.
-        q               Save and quit geotag.
-        u               Undo.
-        r               Redo.
         v               View-dialog.
         t               Tag-dialog.
-        o               Organize tmux panes.
-        d               Delete tag info for selected samples.
+        s               Manual synchronous save. (auto-saves after each action)
+        q               Quit geotag.
+
         0-9             Set tag info for selected samples.
+        d               Delete tag info for selected samples.
+        u               Undo.
+        r               Redo.
+
         Enter           Show sample in gse-soft-file.
+        o               Organize tmux panes.
+
         Up              Move upward.
         Down            Move downward.
         Shift+Up        Select upward.
