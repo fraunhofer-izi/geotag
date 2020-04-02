@@ -380,7 +380,7 @@ class App:
                 sel_status = self._id_for_index(self.pointer)
             else:
                 sel_status = str(len(self.selection))
-                pos = f'{self.pointer}'
+            pos = f'{self.pointer}'
             if self.total_lines > 1:
                 pos += f' ({int(100*self.pointer/(self.total_lines-1))}%)'
             status_bar = [
