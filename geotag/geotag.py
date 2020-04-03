@@ -16,37 +16,38 @@ from .undo import stack, undoable
 
 # use system default localization
 locale.setlocale(locale.LC_ALL, 'C')
-code = locale.getpreferredencoding()
+CODE = locale.getpreferredencoding()
 
 
-tcolors = [196, 203, 202, 208, 178, 148, 106, 71, 31, 26]
-tag_characteristics = ['editor', 'key', 'type', 'col_width', 'desc']
+TCOLORS = [196, 203, 202, 208, 178, 148, 106, 71, 31, 26]
+TAG_CHARS = ['editor', 'key', 'type', 'col_width', 'desc']
 default_tags = {
-    'quality':{
-        'type':'int',
-        'desc':'From 0 to 9.\n'
-               '0 - unrelated or no data\n'
-               '1 - bad annotation\n'
-               '2 - bad sample\n'
-               '3 - cell mixture\n'
-               '4 - modified cells (knock-down or spike-in)\n'
-               '5\n'
-               '6 - stressed or impure cells\n'
-               '7\n'
-               '8 - perfectly pure and unmodified cells\n'
-               '9 - total RNA seq protocol',
-        'editor':'dominik.otto',
-        'key':'q',
-        'col_width':8
+    'quality': {
+        'type': 'int',
+        'desc': 'From 0 to 9.\n'
+        '0 - unrelated or no data\n'
+        '1 - bad annotation\n'
+        '2 - bad sample\n'
+        '3 - cell mixture\n'
+        '4 - modified cells (knock-down or spike-in)\n'
+        '5\n'
+        '6 - stressed or impure cells\n'
+        '7\n'
+        '8 - perfectly pure and unmodified cells\n'
+        '9 - total RNA seq protocol',
+        'editor': 'dominik.otto',
+        'key': 'q',
+        'col_width': 8
     },
-    'note':{
-        'type':'str',
-        'desc':'A note.',
-        'editor':'dominik.otto',
-        'key':'n',
-        'col_width':20
+    'note': {
+        'type': 'str',
+        'desc': 'A note.',
+        'editor': 'dominik.otto',
+        'key': 'n',
+        'col_width': 20
     }
 }
+
 
 def uniquify(vals):
     seen = set()
@@ -58,6 +59,7 @@ def uniquify(vals):
             newitem = "{}_{}".format(item, fudge)
         yield newitem
         seen.add(newitem)
+
 
 class App:
 
@@ -125,15 +127,14 @@ class App:
         Ctrl+a          Select all.
         """.splitlines()
 
-
     def __init__(self, rnaSeq, array, log, tags, output, user, softPath,
                  showKey, **kwargs):
         logging.basicConfig(filename=log, filemode='a', level=logging.DEBUG,
-                format='[%(asctime)s] %(levelname)s: %(message)s')
+                            format='[%(asctime)s] %(levelname)s: %(message)s')
         self.output = output
         self.n_backups = 10
         self.backup_every_n_saves = 10
-        self.backup_base_name = self.output+'.backup_'
+        self.backup_base_name = self.output + '.backup_'
         self.saves = 0
         self.showKey = showKey
         self.tmux_split_percentage = 50
@@ -179,21 +180,41 @@ class App:
         self.tags = dict()
         self.tag_data = dict()
         if not os.path.exists(self.output):
-            logging.warning(f'The output file "{self.output}" dose not exist '
-                            'yet. Starting over...')
+            logging.warning('The output file "%s" dose not exist '
+                            'yet. Starting over...', self.output)
             self.tag_data = dict()
         else:
             with open(self.output, 'rb') as f:
                 data = yaml.load(f, Loader=yaml.SafeLoader)
             if not isinstance(data, dict):
-                logging.warning(f'The loaded {self.output} is no dict '
-                                'and will be resetted.')
+                logging.warning('The loaded %s is no dict '
+                                'and will be resetted.', self.output)
                 self.data = dict()
             else:
                 self.data = data
         self.load_tag_definitions()
         self.reset_cols()
         self._update_now = True
+        # init content variables
+        self.stdscr = None # curses standard screen
+        self.df = None # the pandas data frame
+        self.header = ''
+        self.lines = []
+        self.total_lines = 0
+        self.stale_lines = set()
+        self.ordered_columns = []
+        self.coloring_now = None
+        self.colmap = lambda x: None
+        # init variables that get set in dialog:
+        self.win = None # a curses floating window
+        self.table_y0 = 0 # table position
+        self.table_x0 = 0 # table position
+        self.indentation = 0
+        self.woffset = 0
+        self.max_tag_desc_hight = 0
+        self._dialog_changed = False
+        self.tag_ypos = 0
+        self.tag_xpos = 0
 
     def load_tag_definitions(self):
         try:
@@ -202,14 +223,14 @@ class App:
         except IOError:
             pass
         if not self.tags:
-            logging.warning(f'The tags file "{self.tags}" could not be read. '
-                           'Using default tags...')
+            logging.warning('The tags file "%s" could not be read. '
+                            'Using default tags...', self.tags)
             self.tags = default_tags
         for tag in self.tags:
             self.tag_data.setdefault(tag, dict())
 
     def save_tag_definitions(self):
-        temp_out = self.tags_file+'.'+self.user
+        temp_out = self.tags_file + '.' + self.user
         with open(temp_out, 'w') as f:
             f.write(yaml.dump(self.tags, default_flow_style=False))
         os.rename(temp_out, self.tags_file)
@@ -246,7 +267,7 @@ class App:
         self.sort_columns.add('coarse.cell.type')
         self.sort_reverse_columns.add('n_sample')
 
-    def toggl_help(self, to: bool=None):
+    def toggl_help(self, to: bool = None):
         if to is not None:
             self.print_help = to
         else:
@@ -260,7 +281,7 @@ class App:
                                           dtype=locate(self.tags[col]['type']))
             data_frames.append(tagd)
         r = pd.concat(data_frames, axis=1, join='outer', sort=False)\
-                .fillna(self.missing_data_value)
+            .fillna(self.missing_data_value)
         for col, filter in self.filter.items():
             r = r[r[col].astype(str).str.contains(filter)]
         if self.sort_columns or self.sort_reverse_columns:
@@ -273,8 +294,8 @@ class App:
         if r.empty:
             logging.debug('No entries match the filter.')
             r = pd.DataFrame({
-                'id':['none'],
-                'gse':['None']
+                'id': ['none'],
+                'gse': ['None']
             })
         self.df = r
         if self.color_by not in r.columns:
@@ -285,10 +306,10 @@ class App:
         if tag_type == 'int' or \
                 pd.api.types.is_numeric_dtype(r[self.color_by].dtype):
             self.colmap = lambda x: \
-                99 if x==self.missing_data_value else int(x%10)+1
+                99 if x == self.missing_data_value else int(x % 10) + 1
         else:
-            cmap = {key:i%10+1 for i, key in
-                    enumerate(sorted(set(r[self.color_by])-{None}))}
+            cmap = {key: i % 10 + 1 for i, key in
+                    enumerate(sorted(set(r[self.color_by]) - {None}))}
             self.colmap = cmap.get
 
     def _init_curses(self):
@@ -300,23 +321,23 @@ class App:
         curses.init_pair(103, curses.COLOR_WHITE, -1)
         curses.init_pair(104, curses.COLOR_YELLOW, -1)
         curses.init_pair(105, curses.COLOR_CYAN, -1)
-        for i, col in enumerate(tcolors):
-            curses.init_pair(i+1, col, -1)
+        for i, col in enumerate(TCOLORS):
+            curses.init_pair(i + 1, col, -1)
 
     def _format(self, val, col, width):
-        if val==self.missing_data_value:
-            return ' '*(width-1)+self.missing_data_value
+        if val == self.missing_data_value:
+            return ' ' * (width - 1) + self.missing_data_value
         tag_dtype = self.tags.get(col, dict()).get('type', '')
         if tag_dtype == 'int':
             if val is np.nan:
-                return ' '*(width-1)+self.missing_data_value
+                return ' ' * (width - 1) + self.missing_data_value
             text = f'%{width}d' % val
         else:
             text = str(val).splitlines()[0]
-        if len(text)>width:
+        if len(text) > width:
             if width < 3:
                 return '...'[:width]
-            return text[:(width-3)]+'...'
+            return text[:(width - 3)] + '...'
         return text.rjust(width)
 
     def _str_from_line(self, line=None):
@@ -327,7 +348,7 @@ class App:
             )
         return self.column_seperator.join(
             self._format(l, col, w) for l, (col, w) in
-                zip(line, self.col_widths())
+            zip(line, self.col_widths())
         )
 
     def update_content(self):
@@ -361,21 +382,21 @@ class App:
                 self.update_content()
                 self._update_now = False
             curses.update_lines_cols()
-            padding = ' '*curses.COLS
-            nlines = curses.LINES-4
-            if self.pointer > self.total_lines-1:
+            padding = ' ' * curses.COLS
+            nlines = curses.LINES - 4
+            if self.pointer > self.total_lines - 1:
                 logging.debug('Resetting pointer to 0.')
                 self.pointer = 0
             self.top = self.pointer if self.pointer < self.top else self.top
             self.top = self.pointer - nlines \
-                    if self.pointer >= self.top + nlines else self.top
+                if self.pointer >= self.top + nlines else self.top
             tabcols = curses.COLS
-            cols = slice(self.lrpos, self.lrpos+tabcols)
+            cols = slice(self.lrpos, self.lrpos + tabcols)
             button = self.top + nlines
-            viewed_lines = range(self.top, button+1)
+            viewed_lines = range(self.top, button + 1)
             self.update_lines(viewed_lines)
             self._print_body(self.header, self.lines, nlines, cols)
-            curses.setsyx(nlines+2, 0)
+            curses.setsyx(nlines + 2, 0)
             if len(self.selection) == 1:
                 sel_status = str(self._id_for_index(self.pointer))
             else:
@@ -401,33 +422,33 @@ class App:
             for name, content, color in status_bar:
                 name = f' {name}: '
                 y, x = stdscr.getyx()
-                space = curses.COLS-1-x
-                if y<curses.LINES-1: # we have an extra line
-                    space += curses.COLS-1
-                if len(name)>space:
+                space = curses.COLS - 1 - x
+                if y < curses.LINES - 1:  # we have an extra line
+                    space += curses.COLS - 1
+                if len(name) > space:
                     if space < 4:
                         stdscr.addstr(' ...'[:space])
                         break
-                    stdscr.addstr(name[:(space-4)]+' ...',
-                    curses.color_pair(color))
+                    stdscr.addstr(name[:(space - 4)] + ' ...',
+                                  curses.color_pair(color))
                     break
                 stdscr.addstr(name, curses.color_pair(color))
                 y, x = stdscr.getyx()
-                space = curses.COLS-1-x
-                if y<curses.LINES-1: # we have an extra line
-                    space += curses.COLS-1
-                if content and len(content)>space:
+                space = curses.COLS - 1 - x
+                if y < curses.LINES - 1:  # we have an extra line
+                    space += curses.COLS - 1
+                if content and len(content) > space:
                     if space < 4:
                         stdscr.addstr(' ...'[:space])
                         break
-                    stdscr.addstr(content[:(space-4)]+' ...')
+                    stdscr.addstr(content[:(space - 4)] + ' ...')
                     break
                 stdscr.addstr(content)
             y, x = stdscr.getyx()
-            stdscr.addstr(' '*(curses.COLS-x-1))
-            if y < curses.LINES-1:
+            stdscr.addstr(' ' * (curses.COLS - x - 1))
+            if y < curses.LINES - 1:
                 # clear last line
-                stdscr.addstr(' '*(curses.COLS-1))
+                stdscr.addstr(' ' * (curses.COLS - 1))
             if self.print_help:
                 self._print_help()
             if self.in_dialog:
@@ -474,14 +495,15 @@ class App:
         return cn + next_c
 
     def _print_body(self, header, lines, nlines, cols, y0=0, x0=0):
-        padding = ' '*curses.COLS
+        padding = ' ' * curses.COLS
         h = header + padding
         self.stdscr.addstr(y0, x0, h[cols])
-        for i in range(nlines+1):
+        for i in range(nlines + 1):
             pos = i + self.top
-            attr = curses.A_REVERSE if self.is_selected(pos) else curses.A_NORMAL
+            attr = curses.A_REVERSE if self.is_selected(
+                pos) else curses.A_NORMAL
             if pos >= self.total_lines or pos > len(lines):
-                self.stdscr.addstr(y0+i+1, 0, padding)
+                self.stdscr.addstr(y0 + i + 1, 0, padding)
                 continue
             if self.coloring_now in self.df.columns and \
                     len(self.df[self.coloring_now]) > pos:
@@ -489,14 +511,14 @@ class App:
                 if val is not None:
                     col = self.colmap(val)
                     attr |= curses.color_pair(col)
-            text = lines[pos]+padding
-            self.stdscr.addstr(y0+i+1, x0, text[cols], attr)
+            text = lines[pos] + padding
+            self.stdscr.addstr(y0 + i + 1, x0, text[cols], attr)
 
     def is_selected(self, pointer):
         return pointer in self.selection
 
     def _react(self, cn, nlines, tabcols):
-        if cn == b'\x01': # CTRL + a
+        if cn == b'\x01':  # CTRL + a
             self.selection = set(range(self.total_lines))
         elif cn == b'h':
             self.toggl_help()
@@ -508,8 +530,9 @@ class App:
             self.load_tag_definitions()
             self.in_tag_dialog = True
         elif cn == b's':
-            self.stdscr.addstr(0, 0,
-                               'Saving ...'.ljust(curses.COLS)[:curses.COLS-1])
+            self.stdscr.addstr(
+                0, 0, 'Saving ...'.ljust(
+                    curses.COLS)[:curses.COLS - 1])
             self.stdscr.refresh()
             self.save_tag_data(async=False)
         elif cn == b'o':
@@ -529,40 +552,40 @@ class App:
             if self.pointer in self.selection:
                 self.selection.remove(old_pointer)
             self.selection.add(self.pointer)
-        elif cn == b'KEY_SF' or cn == b'\x1b[1;2B': # Shift + Down
+        elif cn == b'KEY_SF' or cn == b'\x1b[1;2B':  # Shift + Down
             old_pointer = self.pointer
             self.pointer += 1
             self.pointer %= self.total_lines
             if self.pointer in self.selection:
                 self.selection.remove(old_pointer)
             self.selection.add(self.pointer)
-        elif cn == b'\x1b[1;5A': # Ctrl + Up
-            tags = self.df[self.current_tag].iloc[:self.pointer+1]
-            candidates = tags.index[tags==self.missing_data_value]
+        elif cn == b'\x1b[1;5A':  # Ctrl + Up
+            tags = self.df[self.current_tag].iloc[:self.pointer + 1]
+            candidates = tags.index[tags == self.missing_data_value]
             if len(candidates) > 0:
                 self.pointer = self.df.index.get_loc(candidates[-1])
                 self.selection = {self.pointer}
             else:
                 self.error = 'No untagged entries above.'
-        elif cn == b'\x1b[1;5B': # Ctrl + Down
+        elif cn == b'\x1b[1;5B':  # Ctrl + Down
             tags = self.df[self.current_tag].iloc[self.pointer:]
-            candidates = tags.index[tags==self.missing_data_value]
+            candidates = tags.index[tags == self.missing_data_value]
             if len(candidates) > 0:
                 self.pointer = self.df.index.get_loc(candidates[0])
                 self.selection = {self.pointer}
             else:
                 self.error = 'No untagged entries below.'
-        elif cn == b'\x1b[1;6A': # Ctrl + Shift + Up
-            tags = self.df[self.current_tag].iloc[:self.pointer+1]
-            candidates = tags.index[tags==self.missing_data_value]
+        elif cn == b'\x1b[1;6A':  # Ctrl + Shift + Up
+            tags = self.df[self.current_tag].iloc[:self.pointer + 1]
+            candidates = tags.index[tags == self.missing_data_value]
             if len(candidates) > 0:
                 self.pointer = self.df.index.get_loc(candidates[-1])
                 self.selection.add(self.pointer)
             else:
                 self.error = 'No untagged entries above.'
-        elif cn == b'\x1b[1;6B': # Ctrl + Shift + Down
+        elif cn == b'\x1b[1;6B':  # Ctrl + Shift + Down
             tags = self.df[self.current_tag].iloc[self.pointer:]
-            candidates = tags.index[tags==self.missing_data_value]
+            candidates = tags.index[tags == self.missing_data_value]
             if len(candidates) > 0:
                 self.pointer = self.df.index.get_loc(candidates[0])
                 self.selection.add(self.pointer)
@@ -573,12 +596,12 @@ class App:
             ypos = 2
             hight = 1
             text = 'position:'
-            width = min(curses.LINES-2-xpos, 10+len(text))
-            rectangle(self.stdscr, ypos-1, xpos-1,
-                      ypos+hight, xpos+width)
+            width = min(curses.LINES - 2 - xpos, 10 + len(text))
+            rectangle(self.stdscr, ypos - 1, xpos - 1,
+                      ypos + hight, xpos + width)
             self.stdscr.addstr(ypos, xpos, text)
-            editwin = self.stdscr.subwin(hight, width-len(text),
-                                         ypos, xpos+len(text))
+            editwin = self.stdscr.subwin(hight, width - len(text),
+                                         ypos, xpos + len(text))
             editwin.clear()
             self.stdscr.refresh()
             box = Textbox(editwin)
@@ -587,19 +610,20 @@ class App:
             if not val.isnumeric():
                 self.error = 'The entered position is not numeric.'
             else:
-                self.pointer = min(self.total_lines-1, max(0, int(float(val))))
+                self.pointer = min(self.total_lines - 1,
+                                   max(0, int(float(val))))
                 self.selection = {self.pointer}
         elif cn == b'G':
             xpos = 2
             ypos = 2
             hight = 1
             text = 'position (add):'
-            width = min(curses.LINES-2-xpos, 10+len(text))
-            rectangle(self.stdscr, ypos-1, xpos-1,
-                      ypos+hight, xpos+width)
+            width = min(curses.LINES - 2 - xpos, 10 + len(text))
+            rectangle(self.stdscr, ypos - 1, xpos - 1,
+                      ypos + hight, xpos + width)
             self.stdscr.addstr(ypos, xpos, text)
-            editwin = self.stdscr.subwin(hight, width-len(text),
-                                         ypos, xpos+len(text))
+            editwin = self.stdscr.subwin(hight, width - len(text),
+                                         ypos, xpos + len(text))
             editwin.clear()
             self.stdscr.refresh()
             box = Textbox(editwin)
@@ -608,34 +632,35 @@ class App:
             if not val.isnumeric():
                 self.error = 'The entered position is not numeric.'
             else:
-                self.pointer = min(self.total_lines-1, max(0, int(float(val))))
+                self.pointer = min(self.total_lines - 1,
+                                   max(0, int(float(val))))
                 self.selection.add(self.pointer)
         elif cn == b' ':
-                self.pointer = random.randint(0, self.total_lines-1)
-                self.selection = {self.pointer}
+            self.pointer = random.randint(0, self.total_lines - 1)
+            self.selection = {self.pointer}
         elif cn == b'KEY_LEFT':
             if self.lrpos > 0:
                 self.lrpos -= 1
         elif cn == b'KEY_SLEFT' or cn == b'\x1b[1;2D':
-            self.lrpos = max(0, self.lrpos - int(tabcols/2))
+            self.lrpos = max(0, self.lrpos - int(tabcols / 2))
         elif cn == b'KEY_RIGHT':
             self.lrpos += 1
         elif cn == b'KEY_SRIGHT' or cn == b'\x1b[1;2C':
-            self.lrpos = self.lrpos + int(tabcols/2)
+            self.lrpos = self.lrpos + int(tabcols / 2)
         elif cn == b'KEY_PPAGE':
-            self.top = max(self.top-nlines, 0)
+            self.top = max(self.top - nlines, 0)
             self.pointer = self.top
             self.selection = {self.pointer}
         elif cn == b'KEY_NPAGE':
             top = self.top + nlines
-            self.pointer = min(top, self.total_lines-1)
-            self.top = min(self.total_lines-nlines-1, top)
+            self.pointer = min(top, self.total_lines - 1)
+            self.top = min(self.total_lines - nlines - 1, top)
             self.selection = {self.pointer}
-        elif cn == b'\x1b[5;2~': # Shift + PageUp
-            self.top = max(self.top-nlines, 0)
+        elif cn == b'\x1b[5;2~':  # Shift + PageUp
+            self.top = max(self.top - nlines, 0)
             old_pointer = self.pointer
-            self.pointer = max(self.pointer-nlines, self.top)
-            new_sel = iter(range(old_pointer-1, self.pointer, -1))
+            self.pointer = max(self.pointer - nlines, self.top)
+            new_sel = iter(range(old_pointer - 1, self.pointer, -1))
             try:
                 line = next(new_sel)
                 if line in self.selection:
@@ -649,12 +674,12 @@ class App:
             except StopIteration:
                 pass
             self.selection.add(self.pointer)
-        elif cn == b'\x1b[6;2~': # Shift + PageDown
+        elif cn == b'\x1b[6;2~':  # Shift + PageDown
             top = self.top + nlines
             old_pointer = self.pointer
-            self.pointer = min(old_pointer+nlines, self.total_lines-1)
-            self.top = min(self.total_lines-nlines-1, top)
-            new_sel = iter(range(old_pointer+1, self.pointer))
+            self.pointer = min(old_pointer + nlines, self.total_lines - 1)
+            self.top = min(self.total_lines - nlines - 1, top)
+            new_sel = iter(range(old_pointer + 1, self.pointer))
             try:
                 line = next(new_sel)
                 if line in self.selection:
@@ -672,8 +697,8 @@ class App:
             self.pointer = self.top = 0
             self.selection = {self.pointer}
         elif cn == b'KEY_END':
-            self.top = self.total_lines-nlines-1
-            self.pointer = self.total_lines-1
+            self.top = self.total_lines - nlines - 1
+            self.pointer = self.total_lines - 1
             self.selection = {self.pointer}
         elif cn == b'u':
             if stack().canundo():
@@ -690,13 +715,13 @@ class App:
             files = dict()
             not_found = set()
             for gse in gses:
-                file = os.path.join(self.softPath, gse, gse+'_family.soft')
+                file = os.path.join(self.softPath, gse, gse + '_family.soft')
                 if os.path.exists(file):
                     files[gse] = file
                 else:
-                    logging.error(f'Could not find {file}')
+                    logging.error('Could not find %s', file)
                     not_found.add(gse)
-            max_panes = int(self.tmux_split_percentage/10)
+            max_panes = int(self.tmux_split_percentage / 10)
             if len(files) > max_panes:
                 self.error = \
                     f'Cannot open more than {max_panes} panes at once. '
@@ -705,9 +730,9 @@ class App:
                 self.error = \
                     f'Could not find soft file for {list(not_found)}. '
             for gse, file in files.items():
-                logging.info(f'Opening {file}')
-                pane_size = int(self.tmux_split_percentage/len(files))
-                ids = local_df["id"].loc[local_df["gse"]==gse].unique()
+                logging.info('Opening %s', file)
+                pane_size = int(self.tmux_split_percentage / len(files))
+                ids = local_df["id"].loc[local_df["gse"] == gse].unique()
                 if len(ids) > 10:
                     if self.error:
                         self.error += ' '
@@ -717,7 +742,7 @@ class App:
                     ids = ids[:10]
                 pattern = '|'.join(f'SAMPLE = {id}' for id in ids)
                 less = f'less -p "{pattern}" "{file}"'
-                d = 'd' if len(files)>1 else ''
+                d = 'd' if len(files) > 1 else ''
                 os.system(f'tmux split-window -{d}p {pane_size} -h {less}')
         elif cn == b'd':
             self.del_tag_data(self.current_tag, self._view_state)
@@ -730,24 +755,24 @@ class App:
             for tag, info in self.tags.items():
                 if cn == b'\x1b' + info['key'].encode():
                     if info['type'] == 'int':
-                        logging.info(f'Starting to tag {tag}.')
+                        logging.info('Starting to tag %s.', tag)
                         self.current_tag = tag
                     elif info['type'] == 'str':
-                        logging.info(f'Starting make a {tag}.')
+                        logging.info('Starting make a %s.', tag)
                         self.make_str(tag)
 
     def make_str(self, tag):
-        hight = min(23, curses.LINES-4)
-        width = min(80, curses.COLS-4)
-        editwin = curses.newwin(hight-3, width-3, 3, 3)
+        hight = min(23, curses.LINES - 4)
+        width = min(80, curses.COLS - 4)
+        editwin = curses.newwin(hight - 3, width - 3, 3, 3)
         rectangle(self.stdscr, 2, 2, hight, width)
         ids = self._id_for_index(list(self.selection))
-        if len(ids)>1:
+        if len(ids) > 1:
             id = f'[{ids[0]} ...]'
         else:
             id = ids[0]
         text = f"Enter {tag} for {id}: (hit Ctrl+g to send)"
-        self.stdscr.addstr(2, 4, text[:(width-4)])
+        self.stdscr.addstr(2, 4, text[:(width - 4)])
         self.stdscr.refresh()
         current_texts = self.get_current_values(tag)
         if len(current_texts) > 1:
@@ -778,7 +803,7 @@ class App:
 
     @property
     def cache(self):
-        return {'_view_state': self._view_state, 'version':self.__version__}
+        return {'_view_state': self._view_state, 'version': self.__version__}
 
     @cache.setter
     def cache(self, cache):
@@ -787,8 +812,8 @@ class App:
     @property
     def data(self):
         return {
-            'tag definitions':self.tags,
-            'tags':self.tag_data
+            'tag definitions': self.tags,
+            'tags': self.tag_data
         }
 
     @data.setter
@@ -810,7 +835,7 @@ class App:
         lselected = list(self.selection)
         ids = self._id_for_index(lselected)
         td = self.tag_data[tag]
-        current =  {id:td.get(id) for id in ids}
+        current = {id: td.get(id) for id in ids}
         if len(ids) == 1:
             id = next(iter(ids))
             long_desc = f'removing tag data "{tag}" for {id}'
@@ -827,7 +852,7 @@ class App:
         self.save_tag_data()
         self.stale_lines.update(self.selection)
         yield short_desc
-        logging.info('undoing '+long_desc)
+        logging.info('undoing %s', long_desc)
         for id, v in current.items():
             if v is None or v is np.nan:
                 td.pop(id, None)
@@ -844,11 +869,11 @@ class App:
         lselected = list(self.selection)
         ids = self._id_for_index(lselected)
         td = self.tag_data[tag]
-        current =  {id:td.get(id) for id in ids}
+        current = {id: td.get(id) for id in ids}
         if self.tags[tag]['type'] == 'str':
             log_val = val.splitlines()[0]
             if len(log_val) > 20:
-                log_val = log_val[:17]+'...'
+                log_val = log_val[:17] + '...'
         else:
             log_val = val
         if len(ids) == 1:
@@ -867,7 +892,7 @@ class App:
         self.save_tag_data()
         self.stale_lines.update(self.selection)
         yield short_desc
-        logging.info('undoing '+long_desc)
+        logging.info('undoing %s', long_desc)
         for id, v in current.items():
             if v is None or v is np.nan:
                 td.pop(id, None)
@@ -894,30 +919,30 @@ class App:
             # This is likely due to curses.wrapper.
             if self.saves % self.backup_every_n_saves == 0:
                 dt = datetime.today().strftime('%Y-%m-%d-%H:%M:%S')
-                backup_name = self.backup_base_name+dt
-                logging.info('Writing backup '+backup_name)
+                backup_name = self.backup_base_name + dt
+                logging.info('Writing backup %s', backup_name)
                 try:
                     os.rename(self.output, backup_name)
                 except FileNotFoundError:
                     pass
                 except BaseException as e:
-                    err = 'Could not write backup: '+str(e)
+                    err = 'Could not write backup: ' + str(e)
                     self.error += err
                     logging.error(err)
-                written = sorted(glob.glob(self.backup_base_name+'*'))
+                written = sorted(glob.glob(self.backup_base_name + '*'))
                 if len(written) > self.n_backups:
-                    logging.info('Deleting old backup '+written[0])
+                    logging.info('Deleting old backup %s', written[0])
                     try:
                         os.unlink(written[0])
                     except BaseException as e:
-                        err = 'Could not delete old backup: '+str(e)
+                        err = 'Could not delete old backup: ' + str(e)
                         self.error += ' ' + err
                         logging.error(err)
             try:
                 with open(self.output, 'w') as f:
                     f.write(yaml.dump(save, default_flow_style=False))
             except BaseException as e:
-                err = 'Could not write tag data: '+str(e)
+                err = 'Could not write tag data: ' + str(e)
                 self.error += ' ' + err
                 logging.error(err)
                 if async:
@@ -929,75 +954,76 @@ class App:
 
     def _print_help(self):
         help = self.helptext
-        hight = min(len(help)+1, curses.LINES-4)
+        hight = min(len(help) + 1, curses.LINES - 4)
         text_width = max(len(line) for line in help)
-        width = min(text_width+8, curses.COLS-4)
+        width = min(text_width + 8, curses.COLS - 4)
         self.win = self.stdscr.subwin(hight, width, 2, 2)
         self.win.clear()
         self.win.border()
-        for i in range(1, hight-1):
-            self.win.addstr(i, 5, help[i][:width-6])
-        if hight-1 < len(help):
-            self.win.addstr(i, 1, ' '*(width-2))
-            self.win.addstr(i, 5, '...'[:width-6])
+        for i in range(1, hight - 1):
+            self.win.addstr(i, 5, help[i][:width - 6])
+        if hight - 1 < len(help):
+            self.win.addstr(i, 1, ' ' * (width - 2))
+            self.win.addstr(i, 5, '...'[:width - 6])
 
     def _view_dialog(self):
         self.table_y0 = 5
         self.table_x0 = 6
-        hight = min(len(self.ordered_columns)+self.table_y0+2, curses.LINES-4)
-        width = min(self._window_width, curses.COLS-4)
+        hight = min(len(self.ordered_columns) +
+                    self.table_y0 + 2, curses.LINES - 4)
+        width = min(self._window_width, curses.COLS - 4)
         self.win = self.stdscr.subwin(hight, width, 2, 2)
         self.win.clear()
         self.win.border()
         buttons = {
-            'v':'exit',
-            'Enter':'edit regex',
-            'r':'reset',
-            'd':'toggle deactivate',
-            's':'toggle sort by',
-            'c':'toggle color by',
-            'shift+up/down':'change order'
+            'v': 'exit',
+            'Enter': 'edit regex',
+            'r': 'reset',
+            'd': 'toggle deactivate',
+            's': 'toggle sort by',
+            'c': 'toggle color by',
+            'shift+up/down': 'change order'
         }
-        self.win.move(1, self.table_x0-2)
+        self.win.move(1, self.table_x0 - 2)
         for key, desc in buttons.items():
-            hintlen = len(key)+len(desc)+4
+            hintlen = len(key) + len(desc) + 4
             _, x = self.win.getyx()
-            if x+hintlen > width-2:
+            if x + hintlen > width - 2:
                 break
             self.win.addstr('  ')
-            self.win.addstr(key+':', curses.color_pair(100))
-            self.win.addstr(' '+desc)
+            self.win.addstr(key + ':', curses.color_pair(100))
+            self.win.addstr(' ' + desc)
         legend = {
-            'legend:':103,
-            'deactivated':102,
-            'sorted':101,
-            'reverse sorted':105,
-            'colored':104
+            'legend:': 103,
+            'deactivated': 102,
+            'sorted': 101,
+            'reverse sorted': 105,
+            'colored': 104
         }
-        self.win.move(2, self.table_x0-2)
+        self.win.move(2, self.table_x0 - 2)
         for lable, col in legend.items():
-            hintlen = len(lable)+2
+            hintlen = len(lable) + 2
             _, x = self.win.getyx()
-            if x+hintlen > width-2:
+            if x + hintlen > width - 2:
                 break
             self.win.addstr('  ')
             self.win.addstr(lable, curses.color_pair(col))
         self.indentation = max(len(c) for c in self.ordered_columns)
-        ind = width-self.table_x0-1 if width-1>self.table_x0 else 0
-        header = 'column' + ' '*(self.indentation-5) + 'regex'
+        ind = width - self.table_x0 - 1 if width - 1 > self.table_x0 else 0
+        header = 'column' + ' ' * (self.indentation - 5) + 'regex'
         self.win.addstr(4, self.table_x0, header[:ind])
-        self.woffset = max(0, self.col_pointer-hight+self.table_y0+3)
+        self.woffset = max(0, self.col_pointer - hight + self.table_y0 + 3)
         for i, col in enumerate(self.ordered_columns):
             if i < self.woffset:
                 continue
             elif self.woffset > 0 and i == self.woffset:
                 self.win.addstr(self.table_y0, self.table_x0, '...'[:ind])
                 continue
-            ypos = i+self.table_y0-self.woffset
-            if ypos+2 == hight:
+            ypos = i + self.table_y0 - self.woffset
+            if ypos + 2 == hight:
                 self.win.addstr(ypos, self.table_x0, '...'[:ind])
                 break
-            attr = curses.A_REVERSE if i==self.col_pointer else curses.A_NORMAL
+            attr = curses.A_REVERSE if i == self.col_pointer else curses.A_NORMAL
             if col not in self.show_columns:
                 attr |= curses.color_pair(legend['deactivated'])
             elif col == self.color_by:
@@ -1007,7 +1033,7 @@ class App:
             elif col in self.sort_reverse_columns:
                 attr |= curses.color_pair(legend['reverse sorted'])
             filter = self.filter.get(col, '.*')
-            text = col + ' '*(self.indentation-len(col)+1) + filter
+            text = col + ' ' * (self.indentation - len(col) + 1) + filter
             self.win.addstr(ypos, self.table_x0, text[:ind], attr)
             if col in self.tag_data:
                 self.win.addstr(ypos, 2, 'tag')
@@ -1015,8 +1041,9 @@ class App:
     def _dialog(self, cn):
         if cn == b'v':
             self.in_dialog = False
-            self.stdscr.addstr(0, 0,
-                               'Loading ...'.ljust(curses.COLS)[:curses.COLS-1])
+            self.stdscr.addstr(
+                0, 0, 'Loading ...'.ljust(
+                    curses.COLS)[:curses.COLS - 1])
             self.stdscr.refresh()
             if self._dialog_changed:
                 self._update_now = True
@@ -1032,10 +1059,10 @@ class App:
             box.edit()
             filter = box.gather().strip()
             if filter not in ['*', '']:
-                logging.info(f'Setting filter for "{col}": "{filter}"')
+                logging.info('Setting filter for "%s": "%s"', (col, filter))
                 self.filter[col] = filter
             else:
-                logging.info(f'Setting empty filter for "{col}".')
+                logging.info('Setting empty filter for "%s".', col)
                 self.filter.pop(col, None)
             self._dialog_changed = True
         elif cn == b'KEY_UP':
@@ -1046,51 +1073,51 @@ class App:
             self.col_pointer %= len(self.ordered_columns)
         elif cn == b'r':
             col = self.ordered_columns[self.col_pointer]
-            logging.info(f'Resetting filter for "{col}".')
+            logging.info('Resetting filter for "%s".', col)
             if col in self.filter:
                 self.filter.pop(col, None)
                 self._dialog_changed = True
         elif cn == b'd':
             col = self.ordered_columns[self.col_pointer]
             if col in self._required_columns:
-                logging.debug(f'Cannot deactivate "{col}".')
+                logging.debug('Cannot deactivate "%s".', col)
             elif col in self.show_columns:
-                logging.info(f'Deactivate "{col}".')
+                logging.info('Deactivate "%s".', col)
                 self.show_columns.remove(col)
             else:
-                logging.info(f'Activate "{col}".')
+                logging.info('Activate "%s".', col)
                 self.show_columns.add(col)
             self._dialog_changed = True
         elif cn == b's':
             col = self.ordered_columns[self.col_pointer]
             if col in self.sort_columns:
-                logging.info(f'Reverse sort by "{col}".')
+                logging.info('Reverse sort by "%s".', col)
                 self.sort_columns.remove(col)
                 self.sort_reverse_columns.add(col)
             elif col in self.sort_reverse_columns:
-                logging.info(f'Do not sort by "{col}".')
+                logging.info('Do not sort by "%s".', col)
                 self.sort_reverse_columns.remove(col)
             else:
-                logging.info(f'Sort by "{col}".')
+                logging.info('Sort by "%s".', col)
                 self.sort_columns.add(col)
             self._dialog_changed = True
         elif cn == b'KEY_SR' or cn == b'\x1b[1;2A':
             col_val = self.ordered_columns[self.col_pointer]
-            logging.info(f'Moving column "{col_val}" up.')
+            logging.info('Moving column "%s" up.', col_val)
             col_pos = self.col_pointer
             self.col_pointer -= 1
             if self.col_pointer < 0:
-                self.col_pointer = len(self.ordered_columns)-1
+                self.col_pointer = len(self.ordered_columns) - 1
                 self.ordered_columns.remove(col_val)
                 self.ordered_columns.append(col_val)
             else:
                 self.ordered_columns[col_pos] = \
-                        self.ordered_columns[self.col_pointer]
+                    self.ordered_columns[self.col_pointer]
                 self.ordered_columns[self.col_pointer] = col_val
                 self._dialog_changed = True
         elif cn == b'KEY_SR' or cn == b'\x1b[1;2B':
             col_val = self.ordered_columns[self.col_pointer]
-            logging.info(f'Moving column "{col_val}" down.')
+            logging.info('Moving column "%s" down.', col_val)
             col_pos = self.col_pointer
             self.col_pointer += 1
             if self.col_pointer >= len(self.ordered_columns):
@@ -1100,12 +1127,12 @@ class App:
                 del self.ordered_columns[-1]
             else:
                 self.ordered_columns[col_pos] = \
-                        self.ordered_columns[self.col_pointer]
+                    self.ordered_columns[self.col_pointer]
                 self.ordered_columns[self.col_pointer] = col_val
                 self._dialog_changed = True
         elif cn == b'c':
             col = self.ordered_columns[self.col_pointer]
-            logging.info(f'Coloring by "{col}".')
+            logging.info('Coloring by "%s".', col)
             if self.color_by == col:
                 self.color_by = False
             else:
@@ -1116,100 +1143,101 @@ class App:
         self.table_y0 = 4
         self.table_x0 = 2
         self.max_tag_desc_hight = min(self.tag_description_max_hight,
-                                      curses.LINES-self.table_x0-6)
+                                      curses.LINES - self.table_x0 - 6)
         content_hight = 0
         obove_selected_hight = 0
         content_ypos = list()
         for i, (tag, info) in enumerate(sorted(self.tags.items())):
-            content_hight += info['desc'].count('\n')+1
+            content_hight += info['desc'].count('\n') + 1
             content_ypos.append(content_hight)
-            if i<self.tag_pointer:
+            if i < self.tag_pointer:
                 obove_selected_hight = content_hight
-            if i==self.tag_pointer:
-                selection_hight = info['desc'].count('\n')+1
-        if i<self.tag_pointer:
+            if i == self.tag_pointer:
+                selection_hight = info['desc'].count('\n') + 1
+        if i < self.tag_pointer:
             # pointed on a new tag
             content_hight += self.max_tag_desc_hight
             selection_hight = self.max_tag_desc_hight
-        hight = min(content_hight+self.table_y0+2, curses.LINES-4)
-        width = min(self._window_width, curses.COLS-4)
-        table_capacity = hight-self.table_y0-4
-        if self.tag_pointer>=i:
+        hight = min(content_hight + self.table_y0 + 2, curses.LINES - 4)
+        width = min(self._window_width, curses.COLS - 4)
+        table_capacity = hight - self.table_y0 - 4
+        if self.tag_pointer >= i:
             # the last entry is selected and no space for "..." needed
             table_capacity += 1
         if selection_hight > table_capacity:
-            self.woffset = obove_selected_hight-1
+            self.woffset = obove_selected_hight - 1
         else:
-            self.woffset = obove_selected_hight+selection_hight-table_capacity-1
+            self.woffset = obove_selected_hight + selection_hight - table_capacity - 1
         self.woffset = max(0, self.woffset)
         self.win = self.stdscr.subwin(hight, width, 2, 2)
         self.win.clear()
         self.win.border()
         buttons = {
-            't':'exit',
-            'Enter':'edit tag',
-            'n':'new tag',
-            'd':'delete tag',
-            'u':'undo',
-            'r':'redo'
+            't': 'exit',
+            'Enter': 'edit tag',
+            'n': 'new tag',
+            'd': 'delete tag',
+            'u': 'undo',
+            'r': 'redo'
         }
-        self.win.move(1, self.table_x0-1)
+        self.win.move(1, self.table_x0 - 1)
         for key, desc in buttons.items():
-            hintlen = len(key)+len(desc)+4
+            hintlen = len(key) + len(desc) + 4
             _, x = self.win.getyx()
-            if x+hintlen > width-2:
+            if x + hintlen > width - 2:
                 break
             self.win.addstr(' ')
-            self.win.addstr(key+':', curses.color_pair(100))
-            self.win.addstr(' '+desc)
+            self.win.addstr(key + ':', curses.color_pair(100))
+            self.win.addstr(' ' + desc)
         if self.tag_error:
             self.win.addstr(2, self.table_x0, self.tag_error,
                             curses.color_pair(102))
             self.tag_error = None
         self.indentation = {'name': max(len(c) for c in self.tags)}
         header = 'name'.ljust(self.indentation['name'])
-        for tc in tag_characteristics:
+        for tc in TAG_CHARS:
             field_len = max(len(str(v[tc])) for v in self.tags.values())
             field_len = max(len(tc), field_len)
-            header += ' '+tc.ljust(field_len)
+            header += ' ' + tc.ljust(field_len)
             self.indentation[tc] = field_len
-        ind = width-self.table_x0-1 if width-1>self.table_x0 else 0
+        ind = width - self.table_x0 - 1 if width - 1 > self.table_x0 else 0
         self.win.addstr(3, self.table_x0, header[:ind])
-        ypos = self.table_y0-self.woffset
+        ypos = self.table_y0 - self.woffset
         if self.woffset > 0:
             self.win.addstr(self.table_y0, self.table_x0, '...'[:ind])
         self.tag_ypos = None
         for i, (tag, info) in enumerate(sorted(self.tags.items())):
             if self.woffset > 0 and ypos <= self.table_y0:
-                ypos += info['desc'].count('\n')+1
+                ypos += info['desc'].count('\n') + 1
                 continue
-            if ypos+2 >= hight:
+            if ypos + 2 >= hight:
                 self.win.addstr(ypos, self.table_x0, '...'[:ind])
                 break
-            if i==self.tag_pointer:
+            if i == self.tag_pointer:
                 attr = curses.A_REVERSE
                 self.tag_ypos = ypos
             else:
                 attr = curses.A_NORMAL
             text = tag.ljust(self.indentation['name'])
             desc_lines = info.get('desc', '').splitlines()
-            for tc in tag_characteristics:
+            for tc in TAG_CHARS:
                 indent = self.indentation[tc]
                 if tc != 'desc':
                     content = str(self.tags[tag].get(tc, ''))
-                    text += ' '+content.ljust(indent)
+                    text += ' ' + content.ljust(indent)
                 else:
-                    x_desc_start = len(text)+1
-                    text += ' '+desc_lines[0].ljust(indent)
+                    x_desc_start = len(text) + 1
+                    text += ' ' + desc_lines[0].ljust(indent)
             self.win.addstr(ypos, self.table_x0, text[:ind], attr)
             ypos += 1
             for k, line in enumerate(desc_lines):
                 if k == 0:
                     continue
-                if ypos+2 >= hight:
+                if ypos + 2 >= hight:
                     self.win.addstr(ypos, self.table_x0, '...'[:ind])
                     break
-                text = ' '*x_desc_start+line.ljust(self.indentation['desc'])
+                text = ' ' * x_desc_start + \
+                    line.ljust(self.indentation['desc'])
                 self.win.addstr(ypos, self.table_x0, text[:ind], attr)
                 ypos += 1
         if self.tag_ypos is None:
@@ -1223,12 +1251,13 @@ class App:
             self.serious = False
         if cn == b't':
             self.in_tag_dialog = False
-            self.stdscr.addstr(0, 0,
-                               'Loading ...'.ljust(curses.COLS)[:curses.COLS-1])
+            self.stdscr.addstr(
+                0, 0, 'Loading ...'.ljust(
+                    curses.COLS)[:curses.COLS - 1])
             self.stdscr.refresh()
         elif cn == b'\n':
             for i, tag in enumerate(sorted(self.tags)):
-                if i==self.tag_pointer:
+                if i == self.tag_pointer:
                     break
             self._tag_edit(tag)
         elif cn == b'n':
@@ -1236,7 +1265,7 @@ class App:
             self.add_tag = True
         elif cn == b'd':
             for i, tag in enumerate(sorted(self.tags)):
-                if i==self.tag_pointer:
+                if i == self.tag_pointer:
                     break
             if self.tag_data.get(tag) and not self.serious:
                 self.tag_error = f'The tag {tag} contains data. ' \
@@ -1260,24 +1289,26 @@ class App:
         info = self.tags.get(tag_name, dict())
         if tag_name is None:
             tag_name = ''
-        ypos = self.tag_ypos+2
-        xpos = self.table_x0+2
-        total_width = min(self._window_width, curses.COLS-4)
-        ind = total_width - xpos if total_width>xpos else 0
+        ypos = self.tag_ypos + 2
+        xpos = self.table_x0 + 2
+        total_width = min(self._window_width, curses.COLS - 4)
+        ind = total_width - xpos if total_width > xpos else 0
+
         def print_status(status, color=101):
-            self.stdscr.addstr(4, self.table_x0+2, status.ljust(ind)[:ind],
+            self.stdscr.addstr(4, self.table_x0 + 2, status.ljust(ind)[:ind],
                                curses.color_pair(color))
             self.stdscr.refresh()
+
         def get_value(default, no_get=False, hight=1):
             width = total_width - xpos
             if not no_get:
                 editwin = self.stdscr.subwin(hight, width, ypos, xpos)
                 editwin.clear()
-                if hight>1:
-                    rectangle(self.stdscr, ypos-1, xpos-1,
-                              ypos+hight, xpos+width)
+                if hight > 1:
+                    rectangle(self.stdscr, ypos - 1, xpos - 1,
+                              ypos + hight, xpos + width)
                     for i, line in enumerate(default.splitlines()):
-                        if i+1>hight:
+                        if i + 1 > hight:
                             break
                         editwin.addstr(i, 0, line[:width])
                 else:
@@ -1288,17 +1319,17 @@ class App:
                 return box.gather().strip()
             else:
                 for i, line in enumerate(default.splitlines()):
-                    if i+1>hight:
+                    if i + 1 > hight:
                         break
-                    self.stdscr.addstr(ypos+i, xpos, line[:width])
+                    self.stdscr.addstr(ypos + i, xpos, line[:width])
         if not tag_name:
             print_status('Enter a name!')
             tag_name = get_value(tag_name)
-        xpos += self.indentation['name']+1
+        xpos += self.indentation['name'] + 1
         new_info = dict()
         get_value(self.user, no_get=True)
         new_info['editor'] = self.user
-        xpos += self.indentation['editor']+1
+        xpos += self.indentation['editor'] + 1
         print_status('Hit a letter key!')
         used_keyes = {t['key'] for t in self.tags.values()}
         current_key = info.get('key', '')
@@ -1311,13 +1342,13 @@ class App:
                 key = current_key
             if key in used_keyes:
                 print_status('Hit an unused letter key!', 102)
-            elif key in 'abcdefghijklmnopqrstuvwxyz' and key!='':
+            elif key in 'abcdefghijklmnopqrstuvwxyz' and key != '':
                 break
             else:
                 print_status('Hit a letter key!', 102)
         new_info['key'] = key
         self.stdscr.addstr(ypos, xpos, key)
-        xpos += self.indentation['key']+1
+        xpos += self.indentation['key'] + 1
         print_status('Enter a type!')
         ct = info.get('type', '')
         if not ct:
@@ -1328,16 +1359,16 @@ class App:
                 print_status('Please enter "int" for integer or "str" '
                              'for string!', 102)
         new_info['type'] = ct
-        xpos += self.indentation['type']+1
+        xpos += self.indentation['type'] + 1
         print_status('Enter a column width!')
         cw = info.get('col_width', '')
         while True:
             cw = get_value(str(cw))
-            if cw.isnumeric() and int(float(cw))>0:
+            if cw.isnumeric() and int(float(cw)) > 0:
                 break
             print_status('Please enter a positive integer!', 102)
         new_info['col_width'] = int(cw)
-        xpos += self.indentation['col_width']+1
+        xpos += self.indentation['col_width'] + 1
         print_status('Enter a description! (hit Ctrl+g to send)')
         while True:
             new_info['desc'] = get_value(info.get('desc', ''),
@@ -1369,7 +1400,7 @@ class App:
             if tag == tag_name:
                 break
         yield desc
-        logging.info('undoing ' + desc)
+        logging.info('undoing %s', desc)
         if old_info is None:
             self.ordered_columns.remove(tag_name)
             self.show_columns.remove(tag_name)
@@ -1405,7 +1436,7 @@ class App:
         self.save_tag_definitions()
         self.tag_pointer %= len(self.tags)
         yield desc
-        logging.info('undoing '+desc)
+        logging.info('undoing %s', desc)
         self.tags[tag_name] = old_def
         self.tag_data[tag_name] = old_data
         self.ordered_columns = [tag_name] + self.ordered_columns
@@ -1427,13 +1458,12 @@ class App:
         indent = 16
         for tag, info in self.tags.items():
             keys = 'Alt+' + info['key']
-            space = ' '*max(1, indent-len(keys))
+            space = ' ' * max(1, indent - len(keys))
             if info['type'] == 'str':
-                h.append(keys+space+'Make a '+tag+'.')
+                h.append(keys + space + 'Make a ' + tag + '.')
             else:
-                h.append(keys+space+'Start tagging '+tag+'.')
+                h.append(keys + space + 'Start tagging ' + tag + '.')
         h.append('')
         h.append('Log:')
         h.append(self.log)
         return h
-
