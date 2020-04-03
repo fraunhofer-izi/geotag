@@ -480,10 +480,11 @@ class App:
         for i in range(nlines+1):
             pos = i + self.top
             attr = curses.A_REVERSE if self.is_selected(pos) else curses.A_NORMAL
-            if pos >= self.total_lines:
+            if pos >= self.total_lines or pos > len(lines):
                 self.stdscr.addstr(y0+i+1, 0, padding)
                 continue
-            if self.coloring_now in self.df.columns:
+            if self.coloring_now in self.df.columns and \
+                    len(self.df[self.coloring_now]) > pos:
                 val = self.df[self.coloring_now].iloc[pos]
                 if val is not None:
                     col = self.colmap(val)
