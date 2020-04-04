@@ -63,7 +63,7 @@ def uniquify(vals):
 
 class App:
 
-    __version__ = '0.0.7'
+    __version__ = '0.0.8'
     missing_data_value = '-'
     tag_description_max_hight = 15
     _byte_numbers = {str(i).encode() for i in range(10)}
