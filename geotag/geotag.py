@@ -192,9 +192,6 @@ class App:
                 self.data = dict()
             else:
                 self.data = data
-        self.load_tag_definitions()
-        self.reset_cols()
-        self._update_now = True
         # init content variables
         self.stdscr = None # curses standard screen
         self.df = None # the pandas data frame
@@ -215,6 +212,10 @@ class App:
         self._dialog_changed = False
         self.tag_ypos = 0
         self.tag_xpos = 0
+        # finally
+        self.load_tag_definitions()
+        self.reset_cols()
+        self._update_now = True
 
     def load_tag_definitions(self):
         try:
@@ -228,6 +229,8 @@ class App:
             self.tags = default_tags
         for tag in self.tags:
             self.tag_data.setdefault(tag, dict())
+            if tag not in self.ordered_columns:
+                self.ordered_columns = [tag] + self.ordered_columns
 
     def save_tag_definitions(self):
         temp_out = self.tags_file + '.' + self.user
