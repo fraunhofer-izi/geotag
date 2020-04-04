@@ -1169,6 +1169,7 @@ class App:
         content_hight = 0
         obove_selected_hight = 0
         content_ypos = list()
+        self.tag_pointer %= len(self.tags) + self.add_tag
         for i, (tag, info) in enumerate(sorted(self.tags.items())):
             content_hight += info['desc'].count('\n') + 1
             content_ypos.append(content_hight)
