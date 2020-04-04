@@ -611,7 +611,10 @@ class App:
             editwin.clear()
             self.stdscr.refresh()
             box = Textbox(editwin)
-            box.edit()
+            try:
+                box.edit()
+            except KeyboardInterrupt:
+                return
             val = box.gather().strip()
             if not val.isnumeric():
                 self.error = 'The entered position is not numeric.'
@@ -633,7 +636,10 @@ class App:
             editwin.clear()
             self.stdscr.refresh()
             box = Textbox(editwin)
-            box.edit()
+            try:
+                box.edit()
+            except KeyboardInterrupt:
+                return
             val = box.gather().strip()
             if not val.isnumeric():
                 self.error = 'The entered position is not numeric.'
@@ -777,7 +783,7 @@ class App:
             id = f'[{ids[0]} ...]'
         else:
             id = ids[0]
-        text = f"Enter {tag} for {id}: (hit Ctrl+g to send)"
+        text = f"Enter {tag} for {id}: (hit Ctrl+g to send or Ctrl+c to stop)"
         self.stdscr.addstr(2, 4, text[:(width - 4)])
         self.stdscr.refresh()
         current_texts = self.get_current_values(tag)
@@ -790,9 +796,13 @@ class App:
         if current_text:
             editwin.addstr(str(current_text))
         box = Textbox(editwin)
-        box.edit()
+        try:
+            box.edit()
+        except KeyboardInterrupt:
+            logging.debug('Aborded making a %s', tag)
+            return
         message = box.gather().strip()
-        if message and message != current_text:
+        if message:
             self.set_tag(tag, message, self._view_state)
 
     def _id_for_index(self, index):
@@ -1256,7 +1266,10 @@ class App:
             # we musst be on a new line
             self.tag_ypos = ypos
         if self.add_tag:
-            self._tag_edit()
+            try:
+                self._tag_edit()
+            except KeyboardInterrupt:
+                pass
 
     def _tag_dialog(self, cn):
         if self.serious and cn != b'd':
@@ -1271,7 +1284,10 @@ class App:
             for i, tag in enumerate(sorted(self.tags)):
                 if i == self.tag_pointer:
                     break
-            self._tag_edit(tag)
+            try:
+                self._tag_edit(tag)
+            except KeyboardInterrupt:
+                pass
         elif cn == b'n':
             self.tag_pointer = len(self.tags)
             self.add_tag = True
@@ -1335,14 +1351,14 @@ class App:
                         break
                     self.stdscr.addstr(ypos + i, xpos, line[:width])
         if not tag_name:
-            print_status('Enter a name!')
+            print_status('Enter a name! (Ctrl+c to stop)')
             tag_name = get_value(tag_name)
         xpos += self.indentation['name'] + 1
         new_info = dict()
         get_value(self.user, no_get=True)
         new_info['editor'] = self.user
         xpos += self.indentation['editor'] + 1
-        print_status('Hit a letter key!')
+        print_status('Hit a letter key! (Ctrl+c to stop)')
         used_keyes = {t['key'] for t in self.tags.values()}
         current_key = info.get('key', '')
         used_keyes -= {current_key}
@@ -1353,15 +1369,15 @@ class App:
             if key == '\n':
                 key = current_key
             if key in used_keyes:
-                print_status('Hit an unused letter key!', 102)
+                print_status('Hit an unused letter key! (Ctrl+c to stop)', 102)
             elif key in 'abcdefghijklmnopqrstuvwxyz' and key != '':
                 break
             else:
-                print_status('Hit a letter key!', 102)
+                print_status('Hit a letter key! (Ctrl+c to stop)', 102)
         new_info['key'] = key
         self.stdscr.addstr(ypos, xpos, key)
         xpos += self.indentation['key'] + 1
-        print_status('Enter a type!')
+        print_status('Enter a type!  (Ctrl+c to stop)')
         ct = info.get('type', '')
         if not ct:
             while True:
@@ -1369,24 +1385,27 @@ class App:
                 if ct in ['int', 'str']:
                     break
                 print_status('Please enter "int" for integer or "str" '
-                             'for string!', 102)
+                             'for string!  (Ctrl+c to stop)', 102)
         new_info['type'] = ct
         xpos += self.indentation['type'] + 1
-        print_status('Enter a column width!')
+        print_status('Enter a column width! (Ctrl+c to stop)')
         cw = info.get('col_width', '')
         while True:
             cw = get_value(str(cw))
             if cw.isnumeric() and int(float(cw)) > 0:
                 break
-            print_status('Please enter a positive integer!', 102)
+            print_status('Please enter a positive integer!  (Ctrl+c to stop)',
+                         102)
         new_info['col_width'] = int(cw)
         xpos += self.indentation['col_width'] + 1
-        print_status('Enter a description! (hit Ctrl+g to send)')
+        print_status('Enter a description! '
+                     '(hit Ctrl+g to send or Ctrl+c to stop)')
         while True:
             new_info['desc'] = get_value(info.get('desc', ''),
                                          hight=self.max_tag_desc_hight)
             if not new_info['desc']:
-                print_status('Enter a description! (hit Ctrl+g to send)', 102)
+                print_status('Enter a description! '
+                             '(hit Ctrl+g to send or Ctrl+c to stop)', 102)
             else:
                 break
         self.set_tag_definition(tag_name, new_info)
