@@ -1071,7 +1071,7 @@ class App:
             box.edit()
             filter = box.gather().strip()
             if filter not in ['*', '']:
-                logging.info('Setting filter for "%s": "%s"', (col, filter))
+                logging.info('Setting filter for "%s": "%s"', col, filter)
                 self.filter[col] = filter
             else:
                 logging.info('Setting empty filter for "%s".', col)
