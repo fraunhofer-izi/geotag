@@ -805,6 +805,12 @@ class App:
     @_view_state.setter
     def _view_state(self, new_state):
         for key, value in new_state.items():
+            if key == 'ordered_columns' and value and isinstance(value, list) \
+                    and getattr(self, 'ordered_columns', []):
+                # make sure no columns are omitted
+                for col in self.ordered_columns:
+                    if col not in value:
+                        value.append(col)
             setattr(self, key, value)
 
     @property
