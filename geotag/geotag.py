@@ -1352,7 +1352,12 @@ class App:
                     self.stdscr.addstr(ypos + i, xpos, line[:width])
         if not tag_name:
             print_status('Enter a name! (Ctrl+c to stop)')
-            tag_name = get_value(tag_name)
+            while True:
+                tag_name = get_value(tag_name)
+                if not tag_name or tag_name in self.tags.keys():
+                    print_status('Enter an unused name! (Ctrl+c to stop)', 102)
+                else:
+                    break
         xpos += self.indentation['name'] + 1
         new_info = dict()
         get_value(self.user, no_get=True)
