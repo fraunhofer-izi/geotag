@@ -13,13 +13,13 @@ def main():
     parser = argparse.ArgumentParser(description=desc,
             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--rnaSeq',
-                        help='.RDS table containing the extraction status of '
+                        help='tsv table containing the extraction status of '
                         'RNASeq studies.', type=str, metavar='path',
                         default='/mnt/ribolution/user_worktmp/dominik.otto/'
                         'tumor-deconvolution-dream-challenge/'
                         'extraction_stats.tsv')
     parser.add_argument('--array',
-                        help='.RDS table containing the extraction status of '
+                        help='tsv table containing the extraction status of '
                         'microarray studies.', type=str, metavar='path',
                         default='/mnt/ribolution/user_worktmp/dominik.otto/'
                         'tumor-deconvolution-dream-challenge/'

@@ -146,9 +146,12 @@ class App:
         self.tags_file = tags
         self.error = ''
         print('Loading data ...')
-        rnaSeq_df = pd.read_csv(self.rnaSeq, sep="\t", low_memory=False)
-        array_df = pd.read_csv(self.array, sep="\t", low_memory=False)
-        self.raw_df = pd.concat([rnaSeq_df, array_df], sort=True)
+        tables = []
+        if self.rnaSeq not in ["None", "none", "False", "false"]:
+            tables.append(pd.read_csv(self.rnaSeq, sep="\t", low_memory=False))
+        if self.array not in ["None", "none", "False", "false"]:
+            tables.append(pd.read_csv(self.array, sep="\t", low_memory=False))
+        self.raw_df = pd.concat(tables, sort=True)
         self.raw_df.index = uniquify(
             self.raw_df['gse'].str.cat(self.raw_df['id'], sep='_')
         )
