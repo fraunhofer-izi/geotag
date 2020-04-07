@@ -1139,7 +1139,7 @@ class App:
                     self.ordered_columns[self.col_pointer]
                 self.ordered_columns[self.col_pointer] = col_val
                 self._dialog_changed = True
-        elif cn == b'KEY_SR' or cn == b'\x1b[1;2B':
+        elif cn == b'KEY_SF' or cn == b'\x1b[1;2B':  # Shift + Down
             col_val = self.ordered_columns[self.col_pointer]
             logging.info('Moving column "%s" down.', col_val)
             col_pos = self.col_pointer
