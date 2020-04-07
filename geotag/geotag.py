@@ -804,6 +804,8 @@ class App:
         message = box.gather().strip()
         if message:
             self.set_tag(tag, message, self._view_state)
+        else:
+            self.del_tag_data(tag, self._view_state)
 
     def _id_for_index(self, index):
         return self.df.index[index]
