@@ -668,7 +668,7 @@ class App:
             self.pointer = min(top, self.total_lines - 1)
             self.top = min(self.total_lines - nlines - 1, top)
             self.selection = {self.pointer}
-        elif cn == b'\x1b[5;2~':  # Shift + PageUp
+        elif cn == b'\x1b[5;2~' or cn == 'KEY_SPREVIOUS':  # Shift + PageUp
             self.top = max(self.top - nlines, 0)
             old_pointer = self.pointer
             self.pointer = max(self.pointer - nlines, self.top)
@@ -686,7 +686,7 @@ class App:
             except StopIteration:
                 pass
             self.selection.add(self.pointer)
-        elif cn == b'\x1b[6;2~':  # Shift + PageDown
+        elif cn == b'\x1b[6;2~' or cn == 'KEY_SNEXT':  # Shift + PageDown
             top = self.top + nlines
             old_pointer = self.pointer
             self.pointer = min(old_pointer + nlines, self.total_lines - 1)
