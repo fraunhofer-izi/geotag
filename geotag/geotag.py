@@ -119,6 +119,10 @@ class App:
         End             Move to the end of the table.
         g               Go to position dialog.
         G               Go to and add position to selection dialog.
+        f               Search for string in displayed columns.
+        F               Search and select all rows with matches.
+        n               Go to next search match.
+        N               Go to previous search match.
         Space           Go to random entry.
         Left            Move to the left hand side.
         Right           Move to the right hand side.
@@ -180,6 +184,7 @@ class App:
         self.last_saver_pid = None
         self.color_by = 'quality'
         self.current_tag = 'quality'
+        self.search_string = ''
         self.tags = dict()
         self.tag_data = dict()
         if not os.path.exists(self.output):
@@ -602,7 +607,7 @@ class App:
             ypos = 2
             hight = 1
             text = 'position:'
-            width = min(curses.LINES - 2 - xpos, 10 + len(text))
+            width = min(curses.COLS - 2 - xpos, 10 + len(text))
             rectangle(self.stdscr, ypos - 1, xpos - 1,
                       ypos + hight, xpos + width)
             self.stdscr.addstr(ypos, xpos, text)
@@ -627,7 +632,7 @@ class App:
             ypos = 2
             hight = 1
             text = 'position (add):'
-            width = min(curses.LINES - 2 - xpos, 10 + len(text))
+            width = min(curses.COLS - 2 - xpos, 10 + len(text))
             rectangle(self.stdscr, ypos - 1, xpos - 1,
                       ypos + hight, xpos + width)
             self.stdscr.addstr(ypos, xpos, text)
@@ -758,6 +763,61 @@ class App:
                 os.system(f'tmux split-window -{d}p {pane_size} -h {less}')
         elif cn == b'd':
             self.del_tag_data(self.current_tag, self._view_state)
+        elif cn == b'f':
+            xpos = 2
+            ypos = 2
+            hight = 1
+            text = 'pattern:'
+            width = min(curses.COLS - 2 - xpos, 80 + len(text))
+            rectangle(self.stdscr, ypos - 1, xpos - 1,
+                      ypos + hight, xpos + width)
+            self.stdscr.addstr(ypos, xpos, text)
+            editwin = self.stdscr.subwin(hight, width - len(text),
+                                         ypos, xpos + len(text))
+            editwin.clear()
+            editwin.addstr(self.search_string)
+            self.stdscr.refresh()
+            box = Textbox(editwin)
+            try:
+                box.edit()
+            except KeyboardInterrupt:
+                return
+            self.search_string = box.gather().strip()
+            cn = b'n'
+        elif cn == b'F':
+            xpos = 2
+            ypos = 2
+            hight = 1
+            text = 'pattern (add all):'
+            width = min(curses.COLS - 2 - xpos, 80 + len(text))
+            rectangle(self.stdscr, ypos - 1, xpos - 1,
+                      ypos + hight, xpos + width)
+            self.stdscr.addstr(ypos, xpos, text)
+            editwin = self.stdscr.subwin(hight, width - len(text),
+                                         ypos, xpos + len(text))
+            editwin.clear()
+            editwin.addstr(self.search_string)
+            self.stdscr.refresh()
+            box = Textbox(editwin)
+            try:
+                box.edit()
+            except KeyboardInterrupt:
+                return
+            self.search_string = box.gather().strip()
+            logging.info('Searching all %s.', self.search_string)
+            try:
+                self.stdscr.addstr(
+                    0, 0, 'Searching ...'.ljust(
+                        curses.COLS)[:curses.COLS - 1])
+                self.stdscr.refresh()
+                for index, (ind, line) in enumerate(self.df.iterrows()):
+                    h = line.astype(str).str.contains(self.search_string).any()
+                    if not h:
+                        continue
+                    self.selection.add(index)
+                    self.pointer = index
+            except KeyboardInterrupt:
+                logging.debug('Aborting the search.')
         else:
             if self.tags[self.current_tag]['type'] == 'int' \
                     and cn in self._byte_numbers:
@@ -772,6 +832,40 @@ class App:
                     elif info['type'] == 'str':
                         logging.info('Starting make a %s.', tag)
                         self.make_str(tag)
+        if cn == b'n':
+            self.stdscr.addstr(
+                0, 0, 'Searching ...'.ljust(
+                    curses.COLS)[:curses.COLS - 1])
+            self.stdscr.refresh()
+            logging.info('Searching next %s.', self.search_string)
+            try:
+                reff = self.df.iloc[self.pointer::]
+                for index, (ind, line) in enumerate(reff.iterrows()):
+                    h = line.astype(str).str.contains(self.search_string).any()
+                    if not h or index == 0:
+                        continue
+                    self.pointer += index
+                    self.selection = {self.pointer}
+                    break
+            except KeyboardInterrupt:
+                logging.debug('Aborting the search.')
+        elif cn == b'N':
+            self.stdscr.addstr(
+                0, 0, 'Searching ...'.ljust(
+                    curses.COLS)[:curses.COLS - 1])
+            self.stdscr.refresh()
+            logging.info('Searching previous %s.', self.search_string)
+            try:
+                reff = self.df.iloc[self.pointer::-1]
+                for index, (ind, line) in enumerate(reff.iterrows()):
+                    h = line.astype(str).str.contains(self.search_string).any()
+                    if not h or index == 0:
+                        continue
+                    self.pointer -= index
+                    self.selection = {self.pointer}
+                    break
+            except KeyboardInterrupt:
+                logging.debug('Aborting the search.')
 
     def make_str(self, tag):
         hight = min(23, curses.LINES - 4)
