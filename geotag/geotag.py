@@ -871,8 +871,11 @@ class App:
         logging.info(long_desc)
         for id in ids:
             td.pop(id, None)
-        old_df = self.df.loc[self.df.index[lselected], tag]
-        self.df.loc[self.df.index[lselected], tag] = self.missing_data_value
+        df_data = False
+        if tag in self.df.columns:
+            df_data = True
+            old_df = self.df.loc[self.df.index[lselected], tag]
+            self.df.loc[self.df.index[lselected], tag] = self.missing_data_value
         self.save_tag_data()
         self.stale_lines.update(self.selection)
         yield short_desc
@@ -884,7 +887,8 @@ class App:
                 td[id] = v
         self.save_tag_data()
         self._view_state = view_state
-        self.df.loc[self.df.index[lselected], tag] = old_df
+        if df_data:
+            self.df.loc[self.df.index[lselected], tag] = old_df
         self.stale_lines = set(range(self.total_lines))
 
     @undoable
@@ -911,8 +915,11 @@ class App:
         logging.info(long_desc)
         for id in ids:
             td[id] = val
-        old_df = self.df.loc[self.df.index[lselected], tag]
-        self.df.loc[self.df.index[lselected], tag] = val
+        df_data = False
+        if tag in self.df.columns:
+            df_data = True
+            old_df = self.df.loc[self.df.index[lselected], tag]
+            self.df.loc[self.df.index[lselected], tag] = val
         self.save_tag_data()
         self.stale_lines.update(self.selection)
         yield short_desc
@@ -924,7 +931,8 @@ class App:
                 td[id] = v
         self.save_tag_data()
         self._view_state = view_state
-        self.df.loc[self.df.index[lselected], tag] = old_df
+        if df_data:
+            self.df.loc[self.df.index[lselected], tag] = old_df
         self.stale_lines = set(range(self.total_lines))
 
     def save_tag_data(self, async=True):
