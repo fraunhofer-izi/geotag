@@ -29,3 +29,25 @@ sure the variable `PYTHONPATH` points to the geotag repo.
 
 # Documentation
 Press `h` after getoag has loaded to receive help.
+
+# Tagging Data Sets
+
+The tagging of the quality of GEO data sets is difficult to standardize between
+different operators. Thus, let's collect different examples and the quality
+that has been assigned to them.
+
+| Tag  | Description | Example |
+| ---- | ----------- | ------- |
+| 0 | unrelated or no data | - |
+| 1 | bad sample | - |
+| 2 | bad annotation | - |
+| 3 | cell mixture | - |
+| 4 | modified cells | knock-down, spike-in, immortalized cell lines |
+| 5 | - | - |
+| 6 | stressed cells | drugs, vaccines |
+| 7 | - | stimulated cells, progenitor cells (if they share a common coarse.cell.type) |
+| 8 | - | - |
+| 9 | perfectly pure and unmodified cells | DMSO controls, untreated cells |
+
+All examples in the table provided above, are NOT fixed but should rather be
+starting points for discussion.
