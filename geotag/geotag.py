@@ -1043,8 +1043,8 @@ class App:
             save = self.data
             # Waiting does not work since children never die.
             # This is likely due to curses.wrapper.
+            dt = datetime.today().strftime('%Y-%m-%d-%H:%M:%S')
             if self.saves % self.backup_every_n_saves == 0:
-                dt = datetime.today().strftime('%Y-%m-%d-%H:%M:%S')
                 backup_name = self.backup_base_name + dt
                 logging.info('Writing backup %s', backup_name)
                 try:
@@ -1064,13 +1064,19 @@ class App:
                         err = 'Could not delete old backup: ' + str(e)
                         self.error += ' ' + err
                         logging.error(err)
+            tmp_name = self.output + '.tmp' + dt
             try:
-                with open(self.output, 'w') as f:
+                with open(tmp_name, 'w') as f:
                     f.write(yaml.dump(save, default_flow_style=False))
+                os.rename(tmp_name, self.output)
             except BaseException as e:
                 err = 'Could not write tag data: ' + str(e)
                 self.error += ' ' + err
                 logging.error(err)
+                try:
+                    os.remove(tmp_name)
+                except BaseException:
+                    pass
                 if async:
                     os._exit(1)
             if async:
