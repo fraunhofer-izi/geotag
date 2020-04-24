@@ -807,7 +807,7 @@ class App:
             logging.info('Searching all %s.', self.search_string)
             try:
                 self.stdscr.addstr(
-                    0, 0, 'Searching ...'.ljust(
+                    0, 0, 'Searching all ...'.ljust(
                         curses.COLS)[:curses.COLS - 1])
                 self.stdscr.refresh()
                 for index, (ind, line) in enumerate(self.df.iterrows()):
@@ -834,7 +834,7 @@ class App:
                         self.make_str(tag)
         if cn == b'n':
             self.stdscr.addstr(
-                0, 0, 'Searching ...'.ljust(
+                0, 0, 'Searching below ...'.ljust(
                     curses.COLS)[:curses.COLS - 1])
             self.stdscr.refresh()
             logging.info('Searching next %s.', self.search_string)
@@ -851,7 +851,7 @@ class App:
                 logging.debug('Aborting the search.')
         elif cn == b'N':
             self.stdscr.addstr(
-                0, 0, 'Searching ...'.ljust(
+                0, 0, 'Searching above ...'.ljust(
                     curses.COLS)[:curses.COLS - 1])
             self.stdscr.refresh()
             logging.info('Searching previous %s.', self.search_string)
