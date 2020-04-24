@@ -810,10 +810,12 @@ class App:
                     0, 0, 'Searching all ...'.ljust(
                         curses.COLS)[:curses.COLS - 1])
                 self.stdscr.refresh()
+                self.error = 'No match found.'
                 for index, (ind, line) in enumerate(self.df.iterrows()):
                     h = line.astype(str).str.contains(self.search_string).any()
                     if not h:
                         continue
+                    self.error = ''
                     self.selection.add(index)
                     self.pointer = index
             except KeyboardInterrupt:
@@ -840,10 +842,12 @@ class App:
             logging.info('Searching next %s.', self.search_string)
             try:
                 reff = self.df.iloc[self.pointer::]
+                self.error = 'No match found below.'
                 for index, (ind, line) in enumerate(reff.iterrows()):
                     h = line.astype(str).str.contains(self.search_string).any()
                     if not h or index == 0:
                         continue
+                    self.error = ''
                     self.pointer += index
                     self.selection = {self.pointer}
                     break
@@ -857,10 +861,12 @@ class App:
             logging.info('Searching previous %s.', self.search_string)
             try:
                 reff = self.df.iloc[self.pointer::-1]
+                self.error = 'No match found above.'
                 for index, (ind, line) in enumerate(reff.iterrows()):
                     h = line.astype(str).str.contains(self.search_string).any()
                     if not h or index == 0:
                         continue
+                    self.error = ''
                     self.pointer -= index
                     self.selection = {self.pointer}
                     break
