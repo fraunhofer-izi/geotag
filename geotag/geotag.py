@@ -367,7 +367,7 @@ class App:
         one_line = self.df.iloc[:1, :]
         self.header = self._str_from_line()
         self.total_lines = self.df.shape[0]
-        self.lines = list(range(self.total_lines))
+        self.lines = ['-'] * self.total_lines
         self.stale_lines = set(range(self.total_lines))
         if self.pointer > self.total_lines:
             self.pointer = 0
