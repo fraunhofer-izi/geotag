@@ -1,6 +1,6 @@
 Geotag is a utility to quickly tag studies and samples from
-the [NCBI Gene Expression Omnibus](https://www.ncbi.nlm.nih.gov/geo/)(GEO)
-on the command line.
+the [NCBI Gene Expression Omnibus](https://www.ncbi.nlm.nih.gov/geo/)
+(GEO) on the command line.
 
 # Features
 
