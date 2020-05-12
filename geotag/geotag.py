@@ -149,6 +149,7 @@ class App:
                  showKey, **kwargs):
         logging.basicConfig(filename=log, filemode='a', level=logging.DEBUG,
                             format='[%(asctime)s] %(levelname)s: %(message)s')
+        # settings
         self.output = output
         self.n_backups = 10
         self.backup_every_n_saves = 10
@@ -161,31 +162,52 @@ class App:
         self.tables = table
         self.softPath = softPath
         self.tags_file = tags
-        self.error = ''
-        self.stdscr = None # curses standard screen
-        self.load_table()
-        self.sort_columns = set()
-        self.sort_reverse_columns = set()
         self.column_seperator = ' '
-        self.filter = dict()
-        self.toggl_help(False)
-        self.in_dialog = False
-        self.in_tag_dialog = False
-        self.pointer = 0
-        self.col_pointer = 0
-        self.tag_pointer = 0
-        self.tag_error = None
-        self.serious = False
-        self.add_tag = False
-        self.selection = {self.pointer}
-        self.lrpos = 0
-        self.top = 0
-        self.last_saver_pid = None
         self.color_by = 'quality'
         self.current_tag = 'quality'
+        # inits
+        self.stdscr = None # curses standard screen
+        self.error = ''
+        self.tag_error = None
+        self.last_saver_pid = None
         self.search_string = ''
         self.tags = dict()
         self.tag_data = dict()
+        # init content variables
+        self.df = None # the pandas data frame
+        self.header = ''
+        self.lines = []
+        self.total_lines = 0
+        self.pointer = 0
+        self.selection = {self.pointer}
+        self.lrpos = 0
+        self.top = 0
+        self.stale_lines = set()
+        self.ordered_columns = []
+        self.sort_columns = set()
+        self.sort_reverse_columns = set()
+        self.filter = dict()
+        self.coloring_now = None
+        self.colmap = lambda x: None
+        self.in_dialog = False
+        self.in_tag_dialog = False
+        # init variables that get set in dialog:
+        self.win = None # a curses floating window
+        self.table_y0 = 0 # table position
+        self.table_x0 = 0 # table position
+        self.indentation = 0
+        self.woffset = 0
+        self.max_tag_desc_hight = 0
+        self._dialog_changed = False
+        self.tag_ypos = 0
+        self.tag_xpos = 0
+        self.col_pointer = 0
+        self.tag_pointer = 0
+        self.serious = False
+        self.add_tag = False
+        # get some data
+        self.load_table()
+        self.toggl_help(False)
         if not os.path.exists(self.output):
             logging.warning('The output file "%s" dose not exist '
                             'yet. Starting over...', self.output)
@@ -199,26 +221,6 @@ class App:
                 self.data = dict()
             else:
                 self.data = data
-        # init content variables
-        self.df = None # the pandas data frame
-        self.header = ''
-        self.lines = []
-        self.total_lines = 0
-        self.stale_lines = set()
-        self.ordered_columns = []
-        self.coloring_now = None
-        self.colmap = lambda x: None
-        # init variables that get set in dialog:
-        self.win = None # a curses floating window
-        self.table_y0 = 0 # table position
-        self.table_x0 = 0 # table position
-        self.indentation = 0
-        self.woffset = 0
-        self.max_tag_desc_hight = 0
-        self._dialog_changed = False
-        self.tag_ypos = 0
-        self.tag_xpos = 0
-        # finally
         self.load_tag_definitions()
         self.reset_cols()
         self._update_now = True
@@ -250,6 +252,11 @@ class App:
                 yield col, self._measured_col_width[col]
             elif col in self.tags:
                 yield col, self.tags[col]['col_width']
+            else:
+                error = f'The column {col} is not measured.'
+                logging.error(error)
+                self.error += error
+                yield col, 10
 
     def load_table(self):
         if self.stdscr:
