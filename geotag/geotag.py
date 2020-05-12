@@ -92,7 +92,7 @@ class App:
         v               View-dialog.
         t               Tag-dialog.
         s               Manual synchronous save. (auto-saves after each action)
-        r               Reload data table.
+        l               Reload data table.
         q               Quit geotag.
 
         0-9             Set tag info for selected samples.
@@ -549,7 +549,7 @@ class App:
             self._dialog_changed = False
             self.load_tag_definitions()
             self.in_tag_dialog = True
-        elif cn == b'r':
+        elif cn == b'l':
             self.load_table()
         elif cn == b's':
             self.stdscr.addstr(
