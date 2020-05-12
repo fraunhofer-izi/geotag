@@ -93,6 +93,7 @@ class App:
         v               View-dialog.
         t               Tag-dialog.
         s               Manual synchronous save. (auto-saves after each action)
+        r               Reload data table.
         q               Quit geotag.
 
         0-9             Set tag info for selected samples.
@@ -148,20 +149,8 @@ class App:
         self.softPath = softPath
         self.tags_file = tags
         self.error = ''
-        print('Loading data ...')
-        table_dfs = []
-        for table in self.tables:
-            table_dfs.append(pd.read_csv(table, sep="\t", low_memory=False))
-        self.raw_df = pd.concat(table_dfs, sort=True)
-        self.raw_df.index = uniquify(
-            self.raw_df['gse'].str.cat(self.raw_df['id'], sep='_')
-        )
-        smap_counts = self.raw_df['gse'].value_counts()
-        self.raw_df['n_sample'] = smap_counts[self.raw_df['gse']].values
-        self._measured_col_width = dict()
-        for col in self.raw_df.columns:
-            l = self.raw_df[col].astype(str).map(len).quantile(.99)
-            self._measured_col_width[col] = int(max(l, len(col)))
+        self.stdscr = None # curses standard screen
+        self.load_table()
         self.sort_columns = set()
         self.sort_reverse_columns = set()
         self.column_seperator = ' '
@@ -198,7 +187,6 @@ class App:
             else:
                 self.data = data
         # init content variables
-        self.stdscr = None # curses standard screen
         self.df = None # the pandas data frame
         self.header = ''
         self.lines = []
@@ -249,6 +237,32 @@ class App:
                 yield col, self._measured_col_width[col]
             elif col in self.tags:
                 yield col, self.tags[col]['col_width']
+
+    def load_table(self):
+        if self.stdscr:
+            self.stdscr.addstr(0, 0, 'Reloading the table ...')
+            self.stdscr.refresh()
+        else:
+            print('Loading data ...')
+        logging.info('Reloading the data tables.')
+        try:
+            table_dfs = []
+            for table in self.tables:
+                table_dfs.append(pd.read_csv(table, sep="\t", low_memory=False))
+            self.raw_df = pd.concat(table_dfs, sort=True)
+            self.raw_df.index = uniquify(
+                self.raw_df['gse'].str.cat(self.raw_df['id'], sep='_')
+            )
+            smap_counts = self.raw_df['gse'].value_counts()
+            self.raw_df['n_sample'] = smap_counts[self.raw_df['gse']].values
+            self._measured_col_width = dict()
+            for col in self.raw_df.columns:
+                l = self.raw_df[col].astype(str).map(len).quantile(.99)
+                self._measured_col_width[col] = int(max(l, len(col)))
+            self._update_now = True
+        except Exception as e:
+            logging.error('Failed loading the data tables with: %s', e)
+            self.error = 'Failed loading the data tables.'
 
     def reset_cols(self):
         ordered_columns = ['id']
@@ -534,6 +548,8 @@ class App:
             self._dialog_changed = False
             self.load_tag_definitions()
             self.in_tag_dialog = True
+        elif cn == b'r':
+            self.load_table()
         elif cn == b's':
             self.stdscr.addstr(
                 0, 0, 'Saving ...'.ljust(
