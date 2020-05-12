@@ -15,7 +15,8 @@ def main():
             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--table',
                         help='One or multiple tsv table containing the '
-                        'samples line-wise and at least the key columns.',
+                        'samples line-wise and at least the columns '
+                        '`gse` and `id`.',
                         nargs='+', metavar='path.tsv')
     parser.add_argument('--log',
                         help='The file path for the log.',
