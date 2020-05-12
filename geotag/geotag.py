@@ -258,21 +258,18 @@ class App:
             'gse',
             'technology',
             'status',
-            'coarse.cell.type',
-            'fine.cell.type',
             'pattern',
             'col',
             'val'
         ]
         all_columns = set(self.raw_df.columns).union(set(self.tags.keys()))
         ordered_columns = [c for c in ordered_columns if c in all_columns]
-        self.show_columns = set(ordered_columns)
         for c in all_columns:
             if c not in ordered_columns:
                 ordered_columns.append(c)
         self.ordered_columns = ordered_columns
+        self.show_columns = set(ordered_columns)
         self.sort_columns.add('gse')
-        self.sort_columns.add('coarse.cell.type')
         self.sort_reverse_columns.add('n_sample')
 
     def toggl_help(self, to: bool = None):
