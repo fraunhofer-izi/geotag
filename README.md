@@ -33,7 +33,10 @@ Geotag runs in Python 3.6 and and later versions. It uses the Python
 interactive user interface on the command line,
 [tmux](https://github.com/tmux/tmux/wiki) to display and organize
 multiple terminals and [less](http://www.greenwoodsoftware.com/less/)
-to inspeact GEO soft files.
+to inspeact GEO soft files. Make sure tmux runs in 256 color mode,
+e.g., by writing `set -g default-terminal "screen-256color"` into
+your `~/.tmux.conf` befor starting tmux. You can install Geotag with
+pip:
 ```
 pip install git+ssh://git@ribogit.izi.fraunhofer.de/Dominik/geotag.git
 ```
