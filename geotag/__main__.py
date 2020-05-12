@@ -52,10 +52,12 @@ def main():
                         help='Display version.',
                         action="version",
                         version=App.__version__)
+    assert os.environ.get('TMUX'), 'Please run geotag inside a tmux.'
+    assert curses.wrapper(lambda sc: hasattr(sc, "get_wch")), \
+            'The ncurses module of your python is compiled without the ' \
+            'required get_wch funtion.'
     args = parser.parse_args()
     args.user = os.environ['USER']
-    if not os.environ.get('TMUX'):
-        raise Exception('Please run geotag inside a tmux.')
     log_path, _ = os.path.split(args.log)
     if log_path == f"{os.environ['HOME']}/geotag":
         try:
