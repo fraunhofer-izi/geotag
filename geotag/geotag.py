@@ -131,7 +131,7 @@ class App:
         Ctrl+a          Select all.
         """.splitlines()
 
-    def __init__(self, rnaSeq, array, log, tags, output, user, softPath,
+    def __init__(self, table, log, tags, output, user, softPath,
                  showKey, **kwargs):
         logging.basicConfig(filename=log, filemode='a', level=logging.DEBUG,
                             format='[%(asctime)s] %(levelname)s: %(message)s')
@@ -144,18 +144,15 @@ class App:
         self.tmux_split_percentage = 50
         self.log = log
         self.user = user
-        self.array = array
-        self.rnaSeq = rnaSeq
+        self.tables = table
         self.softPath = softPath
         self.tags_file = tags
         self.error = ''
         print('Loading data ...')
-        tables = []
-        if self.rnaSeq not in ["None", "none", "False", "false"]:
-            tables.append(pd.read_csv(self.rnaSeq, sep="\t", low_memory=False))
-        if self.array not in ["None", "none", "False", "false"]:
-            tables.append(pd.read_csv(self.array, sep="\t", low_memory=False))
-        self.raw_df = pd.concat(tables, sort=True)
+        table_dfs = []
+        for table in self.tables:
+            table_dfs.append(pd.read_csv(table, sep="\t", low_memory=False))
+        self.raw_df = pd.concat(table_dfs, sort=True)
         self.raw_df.index = uniquify(
             self.raw_df['gse'].str.cat(self.raw_df['id'], sep='_')
         )

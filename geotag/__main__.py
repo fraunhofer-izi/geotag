@@ -12,18 +12,10 @@ def main():
            'the environemnt varoable USER.'
     parser = argparse.ArgumentParser(description=desc,
             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--rnaSeq',
-                        help='tsv table containing the extraction status of '
-                        'RNASeq studies.', type=str, metavar='path',
-                        default='/mnt/ribolution/user_worktmp/dominik.otto/'
-                        'tumor-deconvolution-dream-challenge/'
-                        'extraction_stats.tsv')
-    parser.add_argument('--array',
-                        help='tsv table containing the extraction status of '
-                        'microarray studies.', type=str, metavar='path',
-                        default='/mnt/ribolution/user_worktmp/dominik.otto/'
-                        'tumor-deconvolution-dream-challenge/'
-                        'extraction_stats_array.tsv')
+    parser.add_argument('--table',
+                        help='One or multiple tsv table containing the '
+                        'samples line-wise and at least the key columns.',
+                        nargs='+', metavar='path.tsv')
     parser.add_argument('--log',
                         help='The file path for the log.',
                         type=str, metavar='path',
