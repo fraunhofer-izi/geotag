@@ -84,3 +84,20 @@ to geotag can be displayed in the status bar if you start it with `--showKey`.
 Press `h` after getoag has loaded to receive help.
 Sub-windows of geotag list all available options at the top of the window.
 
+# License
+
+Copyright (C) 2019 Gesellschaft zur Foerderung der angewandten Forschung e.V.
+acting on behalf of its Fraunhofer Institute for Cell Therapy and Immunology
+(IZI).
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program. If not, see http://www.gnu.org/licenses/.
