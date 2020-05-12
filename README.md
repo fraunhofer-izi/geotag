@@ -28,7 +28,7 @@ on the command line.
    left off upon restart.
 
 # Installation
-Geotag runs in Python 3.6 and and later versions. I uses the Python
+Geotag runs in Python 3.6 and and later versions. It uses the Python
 [curses module](https://docs.python.org/3/howto/curses.html) for an
 interactive user interface on the command line,
 [tmux](https://github.com/tmux/tmux/wiki) to display and organize
