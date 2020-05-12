@@ -556,7 +556,7 @@ class App:
                 0, 0, 'Saving ...'.ljust(
                     curses.COLS)[:curses.COLS - 1])
             self.stdscr.refresh()
-            self.save_tag_data(async=False)
+            self.save_tag_data(asynchronous=False)
         elif cn == b'o':
             os.system('tmux select-layout main-vertical')
         elif cn == b'KEY_UP':
@@ -1047,17 +1047,17 @@ class App:
             self.df.loc[self.df.index[lselected], tag] = old_df
         self._reset_lines()
 
-    def save_tag_data(self, async=True):
+    def save_tag_data(self, asynchronous=True):
         previous = self.last_saver_pid
-        if async:
+        if asynchronous:
             self.last_saver_pid = os.fork()
-        if not async and previous:
+        if not asynchronous and previous:
             # we can wait for previous save
             try:
                 _, exit_code = os.waitpid(previous, 0)
             except ChildProcessError:
                 pass
-        if not async or self.last_saver_pid == 0:
+        if not asynchronous or self.last_saver_pid == 0:
             save = self.data
             # Waiting does not work since children never die.
             # This is likely due to curses.wrapper.
@@ -1095,9 +1095,9 @@ class App:
                     os.remove(tmp_name)
                 except BaseException:
                     pass
-                if async:
+                if asynchronous:
                     os._exit(1)
-            if async:
+            if asynchronous:
                 os._exit(0)
 
         self.saves += 1
