@@ -24,25 +24,25 @@ TAG_CHARS = ['editor', 'key', 'type', 'col_width', 'desc']
 default_tags = {
     'quality': {
         'type': 'int',
-        'desc': 'From 0 to 9.\n'
+        'desc': 'From 0 (bad) to 9 (perfect).\n'
         '0 - unrelated or no data\n'
         '1 - bad annotation\n'
         '2 - bad sample\n'
-        '3 - cell mixture\n'
-        '4 - modified cells (knock-down or spike-in)\n'
+        '3\n'
+        '4\n'
         '5\n'
-        '6 - stressed or impure cells\n'
+        '6\n'
         '7\n'
-        '8 - perfectly pure and unmodified cells\n'
-        '9 - total RNA seq protocol',
-        'editor': 'dominik.otto',
+        '8\n'
+        '9 - perfect sample',
+        'editor': 'maintainer',
         'key': 'q',
         'col_width': 8
     },
     'note': {
         'type': 'str',
         'desc': 'A note.',
-        'editor': 'dominik.otto',
+        'editor': 'maintainer',
         'key': 'n',
         'col_width': 20
     }
