@@ -79,7 +79,6 @@ class App:
         'top',
         'df',
         'header',
-        'stale_lines',
         'filter',
         'show_columns',
         'sort_columns',
@@ -372,7 +371,9 @@ class App:
 
     def update_content(self):
         self.update_df()
-        one_line = self.df.iloc[:1, :]
+        self._reset_lines()
+
+    def _reset_lines(self):
         self.header = self._str_from_line()
         self.total_lines = self.df.shape[0]
         self.lines = ['-'] * self.total_lines
@@ -772,7 +773,7 @@ class App:
                 d = 'd' if len(files) > 1 else ''
                 os.system(f'tmux split-window -{d}p {pane_size} -h {less}')
         elif cn == b'd':
-            self.del_tag_data(self.current_tag, self._view_state)
+            self.del_tag_data(self.current_tag)
         elif cn == b'f':
             xpos = 2
             ypos = 2
@@ -834,7 +835,7 @@ class App:
             if self.tags[self.current_tag]['type'] == 'int' \
                     and cn in self._byte_numbers:
                 # set current tag to value
-                self.set_tag(self.current_tag, int(cn), self._view_state)
+                self.set_tag(self.current_tag, int(cn))
                 return
             for tag, info in self.tags.items():
                 if cn == b'\x1b' + info['key'].encode():
@@ -913,9 +914,9 @@ class App:
             return
         message = box.gather().strip()
         if message:
-            self.set_tag(tag, message, self._view_state)
+            self.set_tag(tag, message)
         else:
-            self.del_tag_data(tag, self._view_state)
+            self.del_tag_data(tag)
 
     def _id_for_index(self, index):
         return self.df.index[index]
@@ -934,6 +935,7 @@ class App:
                     if col not in value:
                         value.append(col)
             setattr(self, key, value)
+        self.total_lines = self.df.shape[0]
 
     @property
     def cache(self):
@@ -964,8 +966,8 @@ class App:
         return {td[id] for id in ids if id in td}
 
     @undoable
-    def del_tag_data(self, tag, view_state):
-        self._view_state = view_state
+    def del_tag_data(self, tag):
+        view_state = self._view_state
         lselected = list(self.selection)
         ids = self._id_for_index(lselected)
         td = self.tag_data[tag]
@@ -999,11 +1001,11 @@ class App:
         self._view_state = view_state
         if df_data:
             self.df.loc[self.df.index[lselected], tag] = old_df
-        self.stale_lines = set(range(self.total_lines))
+        self._reset_lines()
 
     @undoable
-    def set_tag(self, tag, val, view_state):
-        self._view_state = view_state
+    def set_tag(self, tag, val):
+        view_state = self._view_state
         lselected = list(self.selection)
         ids = self._id_for_index(lselected)
         td = self.tag_data[tag]
@@ -1043,7 +1045,7 @@ class App:
         self._view_state = view_state
         if df_data:
             self.df.loc[self.df.index[lselected], tag] = old_df
-        self.stale_lines = set(range(self.total_lines))
+        self._reset_lines()
 
     def save_tag_data(self, async=True):
         previous = self.last_saver_pid
@@ -1554,8 +1556,7 @@ class App:
             desc = f'create tag {tag_name}.'
         else:
             desc = f'edit tag {tag_name}.'
-        self.header = self._str_from_line()
-        self.stale_lines = set(range(self.total_lines))
+        self._reset_lines()
         logging.info(desc)
         self.save_tag_definitions()
         for i, tag in enumerate(sorted(self.tags)):
@@ -1573,7 +1574,7 @@ class App:
         else:
             self.tags[tag_name] = old_info
         self.header = self._str_from_line()
-        self.stale_lines = set(range(self.total_lines))
+        self._reset_lines()
         self.save_tag_definitions()
         for i, tag in enumerate(sorted(self.tags)):
             self.tag_pointer = i
@@ -1592,8 +1593,7 @@ class App:
         if tag_name in self.df:
             df_dat = self.df[tag_name]
             del self.df[tag_name]
-            self.stale_lines = set(range(self.total_lines))
-            self.header = self._str_from_line()
+            self._reset_lines()
         desc = f'remove tag {tag_name}'
         logging.info(desc)
         self.save_tag_definitions()
@@ -1608,7 +1608,7 @@ class App:
         if df_dat is not None:
             self.df[tag_name] = df_dat
         self.header = self._str_from_line()
-        self.stale_lines = set(range(self.total_lines))
+        self._reset_lines()
         self.save_tag_definitions()
         for i, tag in enumerate(sorted(self.tags)):
             self.tag_pointer = i
