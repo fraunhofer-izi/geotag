@@ -1,53 +1,86 @@
-This project supllies a utility to quickly tag studies and samples from
-the [NCBI Gene Expression Omnibus](https://www.ncbi.nlm.nih.gov/geo/).
+Geotag is a utility to quickly tag studies and samples from
+the [NCBI Gene Expression Omnibus](https://www.ncbi.nlm.nih.gov/geo/)(geo).
 
 # Installation
 ```
-/usr/bin/python3 -m pip install --user pipx
-/usr/bin/python3 -m pipx install git+ssh://git@ribogit.izi.fraunhofer.de/Dominik/geotag.git
+pip install git+ssh://git@ribogit.izi.fraunhofer.de/Dominik/geotag.git
 ```
 
-# Upgrade
+# Input
+
+Base of the tagging is a table of all samples that should be tagged. The table
+must be tab seperated and contain the columns `gse` with the GEO Series accession
+*GSExxx* and `id` with the GEO sample accession *GSMxxx*. Any additional columns
+may provide supportive information. An example `<geo_sampe_table.tsv>`:
+```tsv
+gse	id	platform_id	characteristics
+GSM1174473	GSE48305	tissue: peripheral blood
+GSM1174472	GSE48305	tissue: peripheral blood
+GSM3263619	GSE116912	cell: human iPSC
 ```
-/usr/bin/python3 -m pipx upgrade geotag
+The table is passed with `--table <geo_sampe_table.tsv>`
+
+Most information on the sample are accesible in the geo soft files. In order
+to make the content available to geotag all relevant soft files need to
+be organized such that the soft file of GSExxx is located in
+`/path/to/the/soft/files/GSExxx/GSExxx_family.soft`. To download and
+organize the soft files accordingly one could use the script `download_soft.sh`
+with a list of line seperated GSE numbers `<gse list>` by
+```bash
+cat <gse list> | xargs -n1 ./download_soft.sh /path/to/the/soft/files
 ```
+
+# Output
+
+Per default geotag writes all its output into the dirctory `~/geotag`.
+There are four differnt files:
+ 1. The tag file holding the tag descriptions (default `tag.yml`).
+ 2. The output file with the tags given to the samples (default `<user name>.yml`).
+ 3. A log-file loging many user actions (default `<user namer>.log`).
+ 4. A binary view file saving the view state of geotag so you can continue
+    where you left off after restarting geotag (default `<user name>.pkl`).
+
+An alternative output path for ach of these files can be specified
+respectivly with the arguments `--tags`, `--output`, `--log` and `--state`.
+
+# Collaboration
+
+To work together in a team, it is recommended to use a unique tag file
+that all members can write to.
+Whenever a member updates a tag description or
+adds a new tag, the change becomes available to another member as soon
+as she presses `t` to view the tag-dialog.
+
+Note that all tag descriptions are also stored in the output file and
+upon a change of a tag description all tags available to a user
+will be written to the tag file. So to remove a tag each member of
+a team has to remove it.
+
+If you want to share additional information between the member such
+as the values they have tagged, it is recommendet to write such
+info into the `<geo_sampe_table.tsv>` e.g. through a periodically
+repeated routine. The member can reload their table by pressing `l`.
 
 # Execution
+
+Geotag needs to be run inside a [tmux](https://github.com/tmux/tmux/wiki)
+session. This allows geotag to display multiple soft files with
+the reliable pager `less` and while using all the window splitting
+and organizing features of tmux. If the output should be stored in
+the default path you can run geotag with
 ```
-/usr/bin/python3 -m geotag
+geotag --table <geo_sampe_table.tsv> --softPath /path/to/the/soft/files
 ```
 
-# Alternative Usage
-There are issues for the installation, since we cannot use th lmod-python wich lacks a required function. So here **alternatively** do the following:
-```
-git clone git@ribogit.izi.fraunhofer.de:Dominik/geotag.git
-/usr/bin/python3 -m pip install --user pandas numpy pyyaml
-PYTHONPATH=$PWD/geotag /usr/bin/python3 -m geotag
-```
-If you want to start the application from another directory, make
-sure the variable `PYTHONPATH` points to the geotag repo.
+# Troubleshooting
+
+Some issues can be resolved by restarting geotag with the `--update` option.
+This will clear the current view state and leave the user at the top of
+the table with default view settings. Another common issue is incomplet
+key press forwarding in the used terminal emulator. The key forwarded
+to geotag can be displayed in the status bar if you start it with `--showKey`.
 
 # Documentation
 Press `h` after getoag has loaded to receive help.
+Sub-windows of geotag list all available options at the top of the window.
 
-# Tagging Data Sets
-
-The tagging of the quality of GEO data sets is difficult to standardize between
-different operators. Thus, let's collect different examples and the quality
-that has been assigned to them.
-
-| Tag  | Description | Example |
-| ---- | ----------- | ------- |
-| 0 | unrelated or no data | - |
-| 1 | bad sample | - |
-| 2 | bad annotation | - |
-| 3 | cell mixture | - |
-| 4 | modified cells | knock-down, spike-in, immortalized cell lines |
-| 5 | - | - |
-| 6 | stressed cells | drugs, vaccines |
-| 7 | - | stimulated cells, progenitor cells (if they share a common coarse.cell.type) |
-| 8 | - | - |
-| 9 | perfectly pure and unmodified cells | DMSO controls, untreated cells |
-
-All examples in the table provided above, are NOT fixed but should rather be
-starting points for discussion.
