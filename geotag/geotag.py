@@ -272,6 +272,8 @@ class App:
             for col in self.raw_df.columns:
                 l = self.raw_df[col].astype(str).map(len).quantile(.99)
                 self._measured_col_width[col] = int(max(l, len(col)))
+                if col not in self.ordered_columns:
+                    self.ordered_columns.append(col)
             self._update_now = True
         except Exception as e:
             logging.error('Failed loading the data tables with: %s', e)
