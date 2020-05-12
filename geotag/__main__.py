@@ -3,6 +3,7 @@
 """Module allowing for ``python -m geotag ...``."""
 import argparse
 import os
+import errno
 import pickle
 import curses
 from .geotag import App
@@ -19,28 +20,27 @@ def main():
     parser.add_argument('--log',
                         help='The file path for the log.',
                         type=str, metavar='path',
-                        default="/mnt/ribolution/user_worktmp/dominik.otto/"
-                        f"geotag_collect/{os.environ['USER']}.log")
+                        default=f"{os.environ['HOME']}/geotag/"
+                                f"{os.environ['USER']}.log")
     parser.add_argument('--tags',
                         help='The file path for the tag yaml.',
                         type=str, metavar='path.yml',
-                        default="/mnt/ribolution/user_worktmp/dominik.otto/"
-                        f"geotag_collect/tags.yaml")
+                        default=f"{os.environ['HOME']}/geotag/"
+                                "tags.yml")
     parser.add_argument('--output',
                         help='The output file path.',
                         type=str, metavar='path.yml',
-                        default="/mnt/ribolution/user_worktmp/dominik.otto/"
-                        f"geotag_collect/{os.environ['USER']}.yml")
+                        default=f"{os.environ['HOME']}/geotag/"
+                                f"{os.environ['USER']}.yml")
     parser.add_argument('--softPath',
-                        help='Path to the soft file directory.',
-                        type=str, metavar='path.yml',
-                        default="/mnt/ribolution/user_worktmp/dominik.otto/"
-                        "tumor-deconvolution-dream-challenge/studies-soft/")
+                        help='Path to the soft file directory s.t. '
+                        'file paths are path/GSExxx/GSExxx_family.soft.',
+                        type=str, metavar='path')
     parser.add_argument('--state',
                         help='Path to a cached state of geotag.',
                         type=str, metavar='path.pkl',
-                        default="/mnt/ribolution/user_worktmp/dominik.otto/"
-                        f"geotag_collect/{os.environ['USER']}.pkl")
+                        default=f"{os.environ['HOME']}/geotag/"
+                                f"{os.environ['USER']}.pkl")
     parser.add_argument('--update',
                         help='Overwrite the cache.',
                         action="store_true")
@@ -55,6 +55,13 @@ def main():
     args.user = os.environ['USER']
     if not os.environ.get('TMUX'):
         raise Exception('Please run geotag inside a tmux.')
+    log_path, _ = os.path.split(args.log)
+    if log_path == f"{os.environ['HOME']}/geotag":
+        try:
+            os.mkdir(log_path)
+        except OSError as e:
+            if e.errno != errno.EEXIST:
+                raise
     app = App(**vars(args))
     if not args.update and os.path.exists(args.state):
         try:
