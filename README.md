@@ -8,6 +8,7 @@ on the command line.
    to tag a samples/rows.
  - Allow the user to modify the sample list to attach additional
    columns retrospectivly.
+ - Quickly display sample specific part of the relevant soft file.
  - Filter and search data rows based on regular expressions.
  - Custom sorting and organization of columns.
  - Tag based line coloring for better overview and feedback to
