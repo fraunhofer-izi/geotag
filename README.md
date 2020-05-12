@@ -2,6 +2,30 @@ Geotag is a utility to quickly tag studies and samples from
 the [NCBI Gene Expression Omnibus](https://www.ncbi.nlm.nih.gov/geo/)(GEO)
 on the command line.
 
+# Features
+
+ - Display custom data table with custom columns that help
+   to tag a samples/rows.
+ - Allow the user to modify the sample list to attach additional
+   columns retrospectivly.
+ - Filter and search data rows based on regular expressions.
+ - Custom sorting and organization of columns.
+ - Tag based line coloring for better overview and feedback to
+   prevent mistakes.
+ - Allow adjustment of tag definitions.
+ - Allow creation of new tags that are shared between all users.
+ - Self-contained documentation to show the user all features
+   without the need to read a manual.
+ - Undo/redo ability.
+ - Automatic backups that do not accumulate indefinitely.
+ - Select, show and tag multiple samples/rows simultaneously.
+ - Allow to make a note per sample/row.
+ - Quick and easy navigation.
+ - Log all tag relevant user interactions.
+ - Save the results automatically and in a human readable format.
+ - Save last state upon exit to allow continuing where the work was
+   left off upon restart.
+
 # Installation
 Geotag runs in Python 3.6 and and later versions. I uses the Python
 [curses module](https://docs.python.org/3/howto/curses.html) for an
