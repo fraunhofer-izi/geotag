@@ -46,14 +46,15 @@ pip install git+ssh://git@ribogit.izi.fraunhofer.de/Dominik/geotag.git
 The base of the tagging is a table of all samples that should be tagged. The table
 must be tab-separated and contain the columns `gse` with the GEO Series accession
 *GSExxx* and `id` with the GEO sample accession *GSMxxx*. Any additional columns
-may provide supportive information. An example `<geo_sampe_table.tsv>`:
+may provide supportive information. An example is given in `example/geo_sampe_table.tsv`:
 ```tsv
-gse id  platform_id characteristics
-GSM1174473  GSE48305    tissue: peripheral blood
-GSM1174472  GSE48305    tissue: peripheral blood
-GSM3263619  GSE116912   cell: human iPSC
+platform_id	gse	id	characteristics
+GPL10999	GSE48305	GSM1174473	tissue: peripheral blood
+GPL10999	GSE48305	GSM1174472	tissue: peripheral blood
+GPL10999	GSE38993	GSM953384	cell type: lung fibroblast iPSC
+GPL10999	GSE38993	GSM953383	cell type: foreskin fibroblast iPSC
 ```
-The table is passed with `--table <geo_sampe_table.tsv>`
+The table is passed with `--table example/geo_sampe_table.tsv`
 
 Most information on the sample is accessible in the GEO soft files. In order
 to make the content available to Geotag all relevant soft files need to
@@ -129,7 +130,7 @@ a team has to remove it.
 
 If you want to share additional information between the team members,
 e.g., the values they have tagged, it is recommended to write such
-info to the `<geo_sampe_table.tsv>` e.g., through a periodically
+info to the input table e.g., through a periodically
 repeated routine. The members can reload the displayed table by pressing `l`.
 
 # Execution
@@ -140,7 +141,7 @@ the reliable pager `less` and while using all the window splitting
 and organizing features of tmux. If the output should be stored in
 the default path, you can run Geotag with
 ```
-python -m geotag --table <geo_sampe_table.tsv> --softPath /path/to/the/soft/files
+python -m geotag --table example/geo_sampe_table.tsv --softPath example/soft
 ```
 
 # Troubleshooting
