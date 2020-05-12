@@ -100,7 +100,7 @@ class App:
         'ordered_columns',
         'color_by'
     }
-    _window_width = 120
+    _window_width = 140
     _helptext = """
         h               Show/hide help window.
         v               View-dialog.
@@ -270,6 +270,10 @@ class App:
             for table in self.tables:
                 table_dfs.append(pd.read_csv(table, sep="\t", low_memory=False))
             self.raw_df = pd.concat(table_dfs, sort=True)
+            for col in ['gse', 'id']:
+                if col not in self.raw_df.columns:
+                    raise Exception('The sample table needs to have the '
+                                    f'column "{col}".')
             self.raw_df.index = uniquify(
                 self.raw_df['gse'].str.cat(self.raw_df['id'], sep='_')
             )
@@ -277,14 +281,17 @@ class App:
             self.raw_df['n_sample'] = smap_counts[self.raw_df['gse']].values
             self._measured_col_width = dict()
             for col in self.raw_df.columns:
-                l = self.raw_df[col].astype(str).map(len).quantile(.99)
+                l = self.raw_df[col].astype(str).map(len).quantile(.99) + 1
                 self._measured_col_width[col] = int(max(l, len(col)))
                 if col not in self.ordered_columns:
                     self.ordered_columns.append(col)
             self._update_now = True
         except Exception as e:
-            logging.error('Failed loading the data tables with: %s', e)
-            self.error = 'Failed loading the data tables.'
+            if self.stdscr:
+                logging.error('Failed loading the data tables with: %s', e)
+                self.error = 'Failed loading the data tables.'
+            else:
+                raise
 
     def reset_cols(self):
         ordered_columns = ['id']
