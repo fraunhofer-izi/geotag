@@ -99,10 +99,10 @@ upon a change of a tag description, all tags available to a user
 will be written to the tag file. So to remove a tag, each member of
 a team has to remove it.
 
-If you want to share additional information between the member such
-as the values they have tagged, it is recommended to write such
-info into the `<geo_sampe_table.tsv>` e.g., through a periodically
-repeated routine. The member can reload their table by pressing `l`.
+If you want to share additional information between the team members,
+e.g., the values they have tagged, it is recommended to write such
+info to the `<geo_sampe_table.tsv>` e.g., through a periodically
+repeated routine. The members can reload the displayed table by pressing `l`.
 
 # Execution
 
