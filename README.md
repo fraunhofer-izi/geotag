@@ -1,7 +1,14 @@
 Geotag is a utility to quickly tag studies and samples from
-the [NCBI Gene Expression Omnibus](https://www.ncbi.nlm.nih.gov/geo/)(geo).
+the [NCBI Gene Expression Omnibus](https://www.ncbi.nlm.nih.gov/geo/)(GEO)
+on the command line.
 
 # Installation
+Geotag runs in Python 3.6 and and later versions. I uses the Python
+[curses module](https://docs.python.org/3/howto/curses.html) for an
+interactive user interface on the command line,
+[tmux](https://github.com/tmux/tmux/wiki) to display and organize
+multiple terminals and [less](http://www.greenwoodsoftware.com/less/)
+to inspeact GEO soft files.
 ```
 pip install git+ssh://git@ribogit.izi.fraunhofer.de/Dominik/geotag.git
 ```
@@ -20,8 +27,8 @@ GSM3263619  GSE116912   cell: human iPSC
 ```
 The table is passed with `--table <geo_sampe_table.tsv>`
 
-Most information on the sample is accessible in the geo soft files. In order
-to make the content available to geotag all relevant soft files need to
+Most information on the sample is accessible in the GEO soft files. In order
+to make the content available to Geotag all relevant soft files need to
 be organized such that the soft file of GSExxx is located in
 `/path/to/the/soft/files/GSExxx/GSExxx_family.soft`. To download and
 organize the soft files accordingly one could use the script `download_soft.sh`
@@ -32,16 +39,36 @@ cat <gse list> | xargs -n1 ./download_soft.sh /path/to/the/soft/files
 
 # Output
 
-Per default, geotag writes all its output into the directory `~/geotag`.
+Per default, Geotag writes all its output into the directory `~/geotag`.
 There are four different files:
  1. The tag file, holding the tag descriptions (default `tag.yml`).
  2. The output file with the tags given to the samples (default `<user name>.yml`).
  3. A log-file loging many user actions (default `<user namer>.log`).
- 4. A binary view file saving the view state of geotag so you can continue
-    where you left off after restarting geotag (default `<user name>.pkl`).
+ 4. A binary view file saving the view state of Geotag so you can continue
+    where you left off after restarting Geotag (default `<user name>.pkl`).
 
 An alternative output path for each of these files can be specified
 respectively with the arguments `--tags`, `--output`, `--log` and `--state`.
+
+## Format
+
+The output file is a [yaml](https://yaml.org/) with the following
+structure:
+```yaml
+tag definitions:
+  <tag name>:
+    col_width: <integer>
+    desc: <str>
+    editor: <str user name>
+    key: <char>
+    type: <"int" or "str">
+  <next tag name ...>
+tags:
+  <tag name>:
+    <gse numer>_<gsm number>(<uniquifying integer if neccesarry>): <value>
+    <...>
+  <next tag name ...>
+```
 
 # Collaboration
 
@@ -64,25 +91,25 @@ repeated routine. The member can reload their table by pressing `l`.
 # Execution
 
 Geotag needs to be run inside a [tmux](https://github.com/tmux/tmux/wiki)
-session. This allows geotag to display multiple soft files with
+session. This allows Geotag to display multiple soft files with
 the reliable pager `less` and while using all the window splitting
 and organizing features of tmux. If the output should be stored in
-the default path, you can run geotag with
+the default path, you can run Geotag with
 ```
-geotag --table <geo_sampe_table.tsv> --softPath /path/to/the/soft/files
+python -m geotag --table <geo_sampe_table.tsv> --softPath /path/to/the/soft/files
 ```
 
 # Troubleshooting
 
-Some issues can be resolved by restarting geotag with the `--update` option.
+Some issues can be resolved by restarting Geotag with the `--update` option.
 This will clear the current view state and leave the user at the top of
 the table with default view settings. Another common issue is incomplete
 keypress forwarding in the used terminal emulator. The key forwarded
-to geotag can be displayed in the status bar if you start it with `--showKey`.
+to Geotag can be displayed in the status bar if you start it with `--showKey`.
 
 # Documentation
 Press `h` after getoag has loaded to receive help.
-Sub-windows of geotag list all available options at the top of the window.
+Sub-windows of Geotag list all available options at the top of the window.
 
 # License
 

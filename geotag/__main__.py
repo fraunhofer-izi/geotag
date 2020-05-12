@@ -54,7 +54,7 @@ def main():
                         version=App.__version__)
     assert os.environ.get('TMUX'), 'Please run geotag inside a tmux.'
     assert curses.wrapper(lambda sc: hasattr(sc, "get_wch")), \
-            'The ncurses module of your python is compiled without the ' \
+            'The curses module of your python is compiled without the ' \
             'required get_wch funtion.'
     args = parser.parse_args()
     args.user = os.environ['USER']
