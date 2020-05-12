@@ -70,6 +70,22 @@ tags:
   <next tag name ...>
 ```
 
+## Saving and Backups
+
+The output file is saved in an asynchronous thread after each tagging
+action by the user. There is no feedback on whether the detached thread
+successfully saved the file. If the user wants to make sure the latest
+information is saved, a synchronous save can be triggered with the
+key `s`.
+
+All tagging actions can be undone with the key `u`. However, if geotag is
+restarted, previous actions cannot be undone. To prevent
+any loss of information a backup of the output file
+and an appendix `.backup_<data and time>` is saved after every 10th
+action. The user can restore a backup by removing the appendix
+from the file name. Geotag will keep at most ten backups by removing
+the oldest backup if this number is exceeded.
+
 # Collaboration
 
 To work together in a team, it is recommended to use a unique tag file
