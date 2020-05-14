@@ -1,10 +1,12 @@
+# Geotag - Quickly Tag Samples from the NCBI Gene Expression Omnibus
+
 Geotag is a utility to quickly tag studies and samples from
 the [NCBI Gene Expression Omnibus](https://www.ncbi.nlm.nih.gov/geo/)
 (GEO) on the command line.
 
 [![asciicast](https://asciinema.org/a/PkCD0Rl223wOIBSPhgbwT2ixm.svg)](https://asciinema.org/a/PkCD0Rl223wOIBSPhgbwT2ixm)
 
-# Features
+## Features
 
  - Display custom data table with custom columns that help
    to tag a samples/rows.
@@ -29,7 +31,7 @@ the [NCBI Gene Expression Omnibus](https://www.ncbi.nlm.nih.gov/geo/)
  - Save last state upon exit to allow continuing where the work was
    left off upon restart.
 
-# Installation
+## Installation
 Geotag runs in Python 3.6 and and later versions. It uses the Python
 [curses module](https://docs.python.org/3/howto/curses.html) for an
 interactive user interface on the command line,
@@ -40,10 +42,10 @@ e.g., by writing `set -g default-terminal "screen-256color"` into
 your `~/.tmux.conf` befor starting tmux. You can install Geotag with
 pip:
 ```
-pip install git+ssh://git@ribogit.izi.fraunhofer.de/Dominik/geotag.git
+pip3 install git+ssh://git@ribogit.izi.fraunhofer.de/Dominik/geotag.git
 ```
 
-# Input
+## Input
 
 The base of the tagging is a table of all samples that should be tagged. The table
 must be tab-separated and contain the columns `gse` with the GEO Series accession
@@ -68,7 +70,7 @@ with a list of line separated GSE numbers `<gse list>` by
 cat <gse list> | xargs -n1 ./download_soft.sh /path/to/the/soft/files
 ```
 
-# Output
+## Output
 
 Per default, Geotag writes all its output into the directory `~/geotag`.
 There are four different files:
@@ -81,7 +83,7 @@ There are four different files:
 An alternative output path for each of these files can be specified
 respectively with the arguments `--tags`, `--output`, `--log` and `--state`.
 
-## Format
+### Format
 
 The output file is a [yaml](https://yaml.org/) with the following
 structure:
@@ -101,7 +103,7 @@ tags:
   <next tag name ...>
 ```
 
-## Saving and Backups
+### Saving and Backups
 
 The output file is saved in an asynchronous thread after each tagging
 action by the user. There is no feedback on whether the detached thread
@@ -117,7 +119,7 @@ action. The user can restore a backup by removing the appendix
 from the file name. Geotag will keep at most ten backups by removing
 the oldest backup if this number is exceeded.
 
-# Collaboration
+## Collaboration
 
 To work together in a team, it is recommended to use a unique tag file
 that all members can write to.
@@ -135,7 +137,7 @@ e.g., the values they have tagged, it is recommended to write such
 info to the input table e.g., through a periodically
 repeated routine. The members can reload the displayed table by pressing `l`.
 
-# Execution
+## Execution
 
 Geotag needs to be run inside a [tmux](https://github.com/tmux/tmux/wiki)
 session. This allows Geotag to display multiple soft files with
@@ -143,10 +145,10 @@ the reliable pager `less` and while using all the window splitting
 and organizing features of tmux. If the output should be stored in
 the default path, you can run Geotag with
 ```
-python -m geotag --table example/geo_sampe_table.tsv --softPath example/soft
+python3 -m geotag --table example/geo_sampe_table.tsv --softPath example/soft
 ```
 
-# Troubleshooting
+## Troubleshooting
 
 Some issues can be resolved by restarting Geotag with the `--update` option.
 This will clear the current view state and leave the user at the top of
@@ -154,11 +156,11 @@ the table with default view settings. Another common issue is incomplete
 keypress forwarding in the used terminal emulator. The key forwarded
 to Geotag can be displayed in the status bar if you start it with `--showKey`.
 
-# Documentation
+## Documentation
 Press `h` after getoag has loaded to receive help.
 Sub-windows of Geotag list all available options at the top of the window.
 
-# License
+## License
 
 Copyright (C) 2019 Gesellschaft zur Foerderung der angewandten Forschung e.V.
 acting on behalf of its Fraunhofer Institute for Cell Therapy and Immunology
