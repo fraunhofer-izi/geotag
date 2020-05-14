@@ -865,7 +865,7 @@ class App:
             if self.tags[self.current_tag]['type'] == 'int' \
                     and cn in self._byte_numbers:
                 # set current tag to value
-                self.set_tag(self.current_tag, int(cn))
+                self.set_tag(self.current_tag, int(cn), self._view_state)
                 return
             for tag, info in self.tags.items():
                 if cn == b'\x1b' + info['key'].encode():
@@ -944,7 +944,7 @@ class App:
             return
         message = box.gather().strip()
         if message:
-            self.set_tag(tag, message)
+            self.set_tag(tag, message, self._view_state)
         else:
             self.del_tag_data(tag)
 
@@ -1034,8 +1034,8 @@ class App:
         self._reset_lines()
 
     @undoable
-    def set_tag(self, tag, val):
-        view_state = self._view_state
+    def set_tag(self, tag, val, view_state):
+        self._view_state = view_state
         lselected = list(self.selection)
         ids = self._id_for_index(lselected)
         td = self.tag_data[tag]
