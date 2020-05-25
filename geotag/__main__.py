@@ -9,8 +9,8 @@ import curses
 from .geotag import App
 
 def main():
-    desc = 'Interface to quickly tag geo data sets. Set a user through ' \
-           'the environemnt varoable USER.'
+    desc = 'Interface to quickly tag geo data sets. Set a user name through ' \
+           'the environemnt variable USER.'
     parser = argparse.ArgumentParser(description=desc,
             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--table',
