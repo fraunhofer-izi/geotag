@@ -42,7 +42,7 @@ e.g., by writing `set -g default-terminal "screen-256color"` into
 your `~/.tmux.conf` befor starting tmux. You can install Geotag with
 pip:
 ```
-pip3 install git+ssh://git@ribogit.izi.fraunhofer.de/Dominik/geotag.git
+pip3 install git+https://github.com/fraunhofer-izi/geotag
 ```
 
 ## Input
