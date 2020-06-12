@@ -162,9 +162,9 @@ Sub-windows of Geotag list all available options at the top of the window.
 
 ## License
 
-Copyright (C) 2019 Gesellschaft zur Foerderung der angewandten Forschung e.V.
-acting on behalf of its Fraunhofer Institute for Cell Therapy and Immunology
-(IZI).
+Copyright (C) 2019 Fraunhofer Gesellschaft zur Foerderung der angewandten
+Forschung e.V.  acting on behalf of its Fraunhofer Institute for Cell Therapy
+and Immunology (IZI).
 
 This program is free software: you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
